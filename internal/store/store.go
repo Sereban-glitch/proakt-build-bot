@@ -184,7 +184,8 @@ func (s *Store) ListObjects(ctx context.Context, chatID int64) ([]domain.ObjectB
 SELECT o.id, o.chat_id, o.name, o.customer, o.status, o.created_at,
   (SELECT count(*) FROM acts a WHERE a.object_id = o.id),
   COALESCE((SELECT SUM(l.sum) FROM act_lines l JOIN acts a ON a.id = l.act_id WHERE a.object_id = o.id), 0),
-  COALESCE((SELECT SUM(p.amount) FROM payments p JOIN acts a ON a.id = p.act_id WHERE a.object_id = o.id), 0)
+  COALESCE((SELECT SUM(p.amount) FROM payments p JOIN acts a ON a.id = p.act_id WHERE a.object_id = o.id), 0),
+  (SELECT count(*) FROM photos ph WHERE ph.object_id = o.id)
 FROM objects o
 WHERE o.chat_id = $1 AND o.status = 'active'
 ORDER BY o.id`, chatID)
@@ -195,7 +196,7 @@ ORDER BY o.id`, chatID)
 	var out []domain.ObjectBrief
 	for rows.Next() {
 		var o domain.ObjectBrief
-		if err := rows.Scan(&o.ID, &o.ChatID, &o.Name, &o.Customer, &o.Status, &o.CreatedAt, &o.Acts, &o.Total, &o.Paid); err != nil {
+		if err := rows.Scan(&o.ID, &o.ChatID, &o.Name, &o.Customer, &o.Status, &o.CreatedAt, &o.Acts, &o.Total, &o.Paid, &o.Photos); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
@@ -247,7 +248,8 @@ func (s *Store) CreateAct(ctx context.Context, objectID int64, lines []domain.Dr
 const actBriefSQL = `
 SELECT a.id, a.act_no, a.object_id, o.name, o.customer,
   COALESCE((SELECT SUM(l.sum)   FROM act_lines l WHERE l.act_id = a.id), 0) AS total,
-  COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id = a.id), 0) AS paid
+  COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id = a.id), 0) AS paid,
+  (SELECT count(*) FROM photos ph WHERE ph.act_id = a.id) AS photos
 FROM acts a JOIN objects o ON o.id = a.object_id
 WHERE o.chat_id = $1
 ORDER BY a.created_at DESC
@@ -263,7 +265,7 @@ func (s *Store) ListActs(ctx context.Context, chatID int64, limit int) ([]domain
 	for rows.Next() {
 		var b domain.ActBrief
 		var total, paid float64
-		if err := rows.Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &total, &paid); err != nil {
+		if err := rows.Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &total, &paid, &b.Photos); err != nil {
 			return nil, err
 		}
 		b.Total, b.Paid = total, paid
@@ -278,9 +280,10 @@ func (s *Store) GetAct(ctx context.Context, actID int64) (domain.ActBrief, error
 	err := s.pool.QueryRow(ctx, `
 SELECT a.id, a.act_no, a.object_id, o.name, o.customer,
   COALESCE((SELECT SUM(l.sum)   FROM act_lines l WHERE l.act_id = a.id), 0),
-  COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id = a.id), 0)
+  COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id = a.id), 0),
+  (SELECT count(*) FROM photos ph WHERE ph.act_id = a.id)
 FROM acts a JOIN objects o ON o.id = a.object_id WHERE a.id = $1`, actID).
-		Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &total, &paid)
+		Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &total, &paid, &b.Photos)
 	if err != nil {
 		return b, ErrNotFound
 	}
@@ -352,6 +355,37 @@ func (s *Store) AddPhoto(ctx context.Context, actID *int64, objectID int64, file
 		"INSERT INTO photos(act_id, object_id, file_id, file_path, caption) VALUES($1,$2,$3,$4,$5)",
 		actID, objectID, fileID, filePath, caption)
 	return err
+}
+
+// ListPhotos — фото объекта (actID > 0: только фото этого акта), новые сверху.
+// Лимит 10: Telegram не любит длинные простыни, а для демонстрации заказчику
+// последних снимков достаточно (v0.3.7).
+func (s *Store) ListPhotos(ctx context.Context, objectID, actID int64) ([]domain.PhotoRec, error) {
+	q := `
+SELECT ph.id, ph.act_id, ph.object_id, ph.file_id, ph.file_path, ph.caption, ph.created_at,
+  COALESCE(a.act_no, 0)
+FROM photos ph LEFT JOIN acts a ON a.id = ph.act_id
+WHERE ph.object_id = $1`
+	args := []any{objectID}
+	if actID > 0 {
+		q += ` AND ph.act_id = $2`
+		args = append(args, actID)
+	}
+	q += ` ORDER BY ph.created_at DESC, ph.id DESC LIMIT 10`
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.PhotoRec
+	for rows.Next() {
+		var p domain.PhotoRec
+		if err := rows.Scan(&p.ID, &p.ActID, &p.ObjectID, &p.FileID, &p.FilePath, &p.Caption, &p.CreatedAt, &p.ActNo); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // --- статистика --------------------------------------------------------------
@@ -458,11 +492,13 @@ func (s *Store) ClearCatalog(ctx context.Context, chatID int64) error {
 }
 
 type Stats struct {
-	Objects int
-	Acts    int
-	Total   float64
-	Paid    float64
-	Photos  int
+	Objects    int
+	Acts       int
+	Total      float64
+	Paid       float64
+	Photos     int
+	ZeroActs   int // акты с суммой 0: работы есть — денег нет (упущенная выгода, v0.3.7)
+	UnpaidActs int // акты с долгом: выполнено, но не оплачено (v0.3.7)
 }
 
 func (s *Store) Stats(ctx context.Context, chatID int64) (Stats, error) {
@@ -473,8 +509,13 @@ SELECT
   (SELECT count(*) FROM acts a JOIN objects o ON o.id=a.object_id WHERE o.chat_id=$1),
   COALESCE((SELECT SUM(l.sum) FROM act_lines l JOIN acts a ON a.id=l.act_id JOIN objects o ON o.id=a.object_id WHERE o.chat_id=$1),0),
   COALESCE((SELECT SUM(p.amount) FROM payments p JOIN acts a ON a.id=p.act_id JOIN objects o ON o.id=a.object_id WHERE o.chat_id=$1),0),
-  (SELECT count(*) FROM photos ph JOIN objects o ON o.id=ph.object_id WHERE o.chat_id=$1)`, chatID).
-		Scan(&st.Objects, &st.Acts, &st.Total, &st.Paid, &st.Photos)
+  (SELECT count(*) FROM photos ph JOIN objects o ON o.id=ph.object_id WHERE o.chat_id=$1),
+  (SELECT count(*) FROM acts a JOIN objects o ON o.id=a.object_id WHERE o.chat_id=$1
+     AND COALESCE((SELECT SUM(l.sum) FROM act_lines l WHERE l.act_id=a.id),0) < 0.01),
+  (SELECT count(*) FROM acts a JOIN objects o ON o.id=a.object_id WHERE o.chat_id=$1
+     AND COALESCE((SELECT SUM(l.sum) FROM act_lines l WHERE l.act_id=a.id),0)
+       - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id=a.id),0) > 0.01)`, chatID).
+		Scan(&st.Objects, &st.Acts, &st.Total, &st.Paid, &st.Photos, &st.ZeroActs, &st.UnpaidActs)
 	return st, err
 }
 

@@ -339,6 +339,24 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 		objID, _ := strconv.ParseInt(strings.TrimPrefix(data, "pho:"), 10, 64)
 		b.attachPhoto(ctx, chatID, stateData, nil, objID)
 
+	case strings.HasPrefix(data, "phv:"): // v0.3.7: показать фото объекта
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Показываю")
+		objID, _ := strconv.ParseInt(strings.TrimPrefix(data, "phv:"), 10, 64)
+		if objID > 0 {
+			b.showPhotos(ctx, chatID, objID, 0)
+		}
+
+	case strings.HasPrefix(data, "pav:"): // v0.3.7: показать фото акта
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Показываю")
+		actID, _ := strconv.ParseInt(strings.TrimPrefix(data, "pav:"), 10, 64)
+		if actID > 0 {
+			if brief, err := b.st.GetAct(ctx, actID); err == nil {
+				b.showPhotos(ctx, chatID, brief.ObjectID, actID)
+			} else {
+				b.text(ctx, chatID, "Акт не найден 😕 Список: /acts")
+			}
+		}
+
 	case data == "finyes": // v0.3.6: завершили акт с позициями без цены осознанно
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Завершаю")
 		state, data2, _ := b.st.State(ctx, chatID)
@@ -519,6 +537,7 @@ func (b *Bot) showObjects(ctx context.Context, chatID int64) {
 	}
 	var sb strings.Builder
 	sb.WriteString("🏠 Твои объекты:\n\n")
+	rows := tg.KB{}
 	for _, o := range objs {
 		sb.WriteString(fmt.Sprintf("• %s%s\n", o.Name, custSuffix(o.Customer)))
 		if o.Acts > 0 {
@@ -528,13 +547,33 @@ func (b *Bot) showObjects(ctx context.Context, chatID int64) {
 			} else if o.Paid > 0.009 {
 				line += " · оплачено ✅"
 			}
+			if o.Photos > 0 {
+				line += fmt.Sprintf(" · 📷 %d", o.Photos)
+			}
 			sb.WriteString(line + "\n")
 		} else {
 			sb.WriteString("   актов ещё нет\n")
 		}
+		if o.Photos > 0 { // v0.3.7: скрытые работы можно показать в любой момент
+			rows = append(rows, []tg.KBButton{{
+				Text:         photoBtnText(o.Name, o.Photos),
+				CallbackData: fmt.Sprintf("phv:%d", o.ID),
+			}})
+		}
 	}
 	sb.WriteString("\n(это предварительные итоги — акты появляются по ходу работ)")
-	b.textKB(ctx, chatID, sb.String(), tg.Inline(tg.KB{{tg.KBButton{Text: BtnNewObj, CallbackData: "objnew"}}}))
+	rows = append(rows, []tg.KBButton{{Text: BtnNewObj, CallbackData: "objnew"}})
+	b.textKB(ctx, chatID, sb.String(), tg.Inline(rows))
+}
+
+// photoBtnText — подпись кнопки показа фото (лимит Telegram — 64 байта).
+func photoBtnText(name string, n int) string {
+	const budget = 44 // 64 − «📷 »(5) − « — »(5) − «NN фото»(≤9)
+	label := name
+	for len(label) > budget { // бьём по рунам, чтобы не разрезать UTF-8
+		label = string([]rune(label)[:len([]rune(label))-1])
+	}
+	return fmt.Sprintf("📷 %s — %d фото", label, n)
 }
 
 // --- акты --------------------------------------------------------------------
@@ -790,6 +829,8 @@ func (b *Bot) paymentFromText(ctx context.Context, chatID int64, data map[string
 
 // --- отчёт -----------------------------------------------------------------------
 
+// showReport — сводка + «упущенная выгода» (v0.3.7, инсайт из видео:
+// мастер должен СРАЗУ видеть, какие деньги проходят мимо кармана).
 func (b *Bot) showReport(ctx context.Context, chatID int64) {
 	stats, err := b.st.Stats(ctx, chatID)
 	if err != nil {
@@ -797,8 +838,39 @@ func (b *Bot) showReport(ctx context.Context, chatID int64) {
 		return
 	}
 	priceN, _ := b.st.CatalogCount(ctx, chatID)
-	b.textKB(ctx, chatID, fmt.Sprintf(
-		"📊 Сводка:\n\n🏠 Объектов: %d\n📋 Актов: %d\n📷 Фото: %d\n💵 Прайс: %d позиций\n\nВыполнено: %s\nОплачено: %s\nДолг: %s",
-		stats.Objects, stats.Acts, stats.Photos, priceN,
-		money(stats.Total), money(stats.Paid), money(stats.Total-stats.Paid)), MainMenu())
+	b.textKB(ctx, chatID, reportText(stats, priceN), MainMenu())
+}
+
+// reportText — текст сводки (вынесен для тестов).
+func reportText(st store.Stats, priceN int) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "📊 Сводка:\n\n🏠 Объектов: %d\n📋 Актов: %d\n📷 Фото: %d\n💵 Прайс: %d позиций\n\nВыполнено: %s\nОплачено: %s\n",
+		st.Objects, st.Acts, st.Photos, priceN, money(st.Total), money(st.Paid))
+
+	debt := st.Total - st.Paid
+	switch {
+	case debt > 0.009 || st.ZeroActs > 0:
+		sb.WriteString("\n⚠️ Упущенная выгода — деньги мимо кармана:\n")
+		if debt > 0.009 {
+			actsWord := "актов"
+			if st.UnpaidActs%10 == 1 && st.UnpaidActs%100 != 11 {
+				actsWord = "акт"
+			} else if st.UnpaidActs%10 >= 2 && st.UnpaidActs%10 <= 4 && (st.UnpaidActs%100 < 10 || st.UnpaidActs%100 >= 20) {
+				actsWord = "акта"
+			}
+			fmt.Fprintf(&sb, "• не оплачено %s (%d %s) — напомни заказчику: 💰 Долги\n",
+				money(debt), st.UnpaidActs, actsWord)
+		}
+		if st.ZeroActs > 0 {
+			zeroWord := "акты с суммой 0"
+			if st.ZeroActs == 1 {
+				zeroWord = "акт с суммой 0"
+			}
+			fmt.Fprintf(&sb, "• %d %s — работы сделаны, деньги не выставлены: оцени по прайсу\n",
+				st.ZeroActs, zeroWord)
+		}
+	default:
+		sb.WriteString("\n✅ Долгов нет, все акты с ценой — деньги под контролем!")
+	}
+	return sb.String()
 }

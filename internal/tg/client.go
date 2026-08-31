@@ -130,6 +130,19 @@ func (c *Client) GetMe(ctx context.Context) (*User, error) {
 	return &me, nil
 }
 
+// SendPhoto — отправить фото по file_id (фото уже хранится в Telegram, v0.3.7:
+// демонстрация скрытых работ заказчику без повторной загрузки).
+func (c *Client) SendPhoto(ctx context.Context, chatID int64, fileID, caption string) error {
+	payload := map[string]any{
+		"chat_id": chatID,
+		"photo":   fileID,
+	}
+	if caption != "" {
+		payload["caption"] = caption
+	}
+	return c.call(ctx, c.http, "sendPhoto", payload, nil)
+}
+
 // SendDocumentFile — отправить файл (XLSX-акт) с подписью.
 func (c *Client) SendDocumentFile(ctx context.Context, chatID int64, path, caption string) error {
 	f, err := os.Open(path)

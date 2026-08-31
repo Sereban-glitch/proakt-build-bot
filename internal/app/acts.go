@@ -22,19 +22,30 @@ func (b *Bot) showActs(ctx context.Context, chatID int64) {
 	var sb strings.Builder
 	sb.WriteString("📋 Последние акты:\n\n")
 	rows := []tg.KBButton{}
+	photoRows := tg.KB{} // v0.3.7: фото акта можно показать одной кнопкой
 	for _, a := range acts {
 		status := "✅ оплачен"
 		if a.Balance() > 0.009 {
 			status = "долг " + money(a.Balance())
 		}
-		sb.WriteString(fmt.Sprintf("• №%d (%s) — %s · %s\n", a.ActNo, a.ObjectName, money(a.Total), status))
+		line := fmt.Sprintf("• №%d (%s) — %s · %s", a.ActNo, a.ObjectName, money(a.Total), status)
+		if a.Photos > 0 {
+			line += fmt.Sprintf(" · 📷 %d", a.Photos)
+			photoRows = append(photoRows, []tg.KBButton{{
+				Text:         fmt.Sprintf("📷 фото акта №%d", a.ActNo),
+				CallbackData: fmt.Sprintf("pav:%d", a.ID),
+			}})
+		}
+		sb.WriteString(line + "\n")
 		rows = append(rows, tg.KBButton{
 			Text:         fmt.Sprintf("🗑 №%d · %s · %s", a.ActNo, a.ObjectName, money(a.Total)),
 			CallbackData: fmt.Sprintf("adel:%d", a.ID),
 		})
 	}
+	kb := tg.KB{rows}
+	kb = append(photoRows, kb...)
 	sb.WriteString("\n🗑 — удалить ошибочный акт (спрошу подтверждение).")
-	b.textKB(ctx, chatID, sb.String(), tg.Inline(tg.KB{rows}))
+	b.textKB(ctx, chatID, sb.String(), tg.Inline(kb))
 }
 
 // confirmDeleteAct — «🗑 №N»: показать, что уйдёт, и спросить.

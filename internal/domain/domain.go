@@ -41,6 +41,7 @@ type ActBrief struct {
 	Customer   string
 	Total      float64
 	Paid       float64
+	Photos     int // фото, привязанные к акту (v0.3.7)
 }
 
 // Balance — сколько осталось оплатить.
@@ -57,21 +58,24 @@ type Payment struct {
 
 // PhotoRec — фото скрытых работ (привязка к акту или объекту).
 type PhotoRec struct {
-	ID       int64
-	ActID    *int64
-	ObjectID int64
-	FileID   string
-	FilePath string
-	Caption  string
+	ID        int64
+	ActID     *int64
+	ObjectID  int64
+	FileID    string
+	FilePath  string
+	Caption   string
+	ActNo     int       // 0 — фото без акта (v0.3.7)
+	CreatedAt time.Time // когда снято/прислано (v0.3.7)
 }
 
 // ObjectBrief — объект с итогами по актам (для списка «объекты с деньгами», v0.3.5):
 // строитель видит предварительный итог по каждому объекту, не открывая акты.
 type ObjectBrief struct {
 	Object
-	Acts  int
-	Total float64
-	Paid  float64
+	Acts   int
+	Total  float64
+	Paid   float64
+	Photos int // фото объекта, для кнопки «📷 показать» (v0.3.7)
 }
 
 // Debt — сколько осталось оплатить по объекту.
