@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.27+-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![Telegram](https://img.shields.io/badge/Telegram-@proakt__build__bot-26A5E4?logo=telegram&logoColor=white)](https://t.me/proakt_build_bot)
+[![Release](https://img.shields.io/github/v/release/Sereban-glitch/proakt-build-bot?display_name=tag)](https://github.com/Sereban-glitch/proakt-build-bot/releases)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 
 **ПрорАКТ** («Прора́б» + «Акт») — Telegram-бот для мастеров отделочных работ: ведёт
