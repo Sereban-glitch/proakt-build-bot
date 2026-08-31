@@ -1,0 +1,31 @@
+[Unit]
+Description=Proakt - Telegram bot for builders (acts of completed works)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proakt
+Group=proakt
+WorkingDirectory=/opt/proakt
+EnvironmentFile=/opt/proakt/.env
+ExecStart=/opt/proakt/proakt
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# Харденинг: бот может писать только в свой каталог файлов
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/proakt/files
+MemoryMax=96M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=proakt
+
+[Install]
+WantedBy=multi-user.target

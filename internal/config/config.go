@@ -1,0 +1,46 @@
+// Package config загружает настройки ПрорАКТА из переменных окружения (.env подгружает systemd).
+package config
+
+import (
+	"errors"
+	"os"
+)
+
+type Config struct {
+	BotToken   string // токен Telegram-бота
+	DBDSN      string // строка подключения к PostgreSQL
+	FilesDir   string // каталог для фото и файлов актов (например, /var/lib/proakt/files)
+	Executor   string // имя исполнителя в актах (укр.)
+	AIGateway  string // URL Anthropic-совместимого LLM-шлюза (для голоса)
+	AIModel    string // модель шлюза для текста (gemini-3-flash)
+	AIModelASR string // модель шлюза для распознавания голоса (gemini-2.5-flash)
+	AIKey      string // опциональный Bearer-ключ шлюза
+}
+
+func getenv(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// Load проверяет обязательные переменные и заполняет дефолты.
+func Load() (*Config, error) {
+	cfg := &Config{
+		BotToken:   os.Getenv("BOT_TOKEN"),
+		DBDSN:      os.Getenv("DB_DSN"),
+		FilesDir:   getenv("FILES_DIR", "files"),
+		Executor:   getenv("EXECUTOR_NAME", "Виконавець"),
+		AIGateway:  os.Getenv("AI_GATEWAY_URL"),
+		AIModel:    getenv("AI_MODEL", "gemini-3-flash"),
+		AIModelASR: getenv("AI_MODEL_ASR", "gemini-2.5-flash"),
+		AIKey:      os.Getenv("AI_GATEWAY_KEY"),
+	}
+	if cfg.BotToken == "" {
+		return nil, errors.New("BOT_TOKEN не задан")
+	}
+	if cfg.DBDSN == "" {
+		return nil, errors.New("DB_DSN не задан")
+	}
+	return cfg, nil
+}
