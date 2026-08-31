@@ -38,6 +38,14 @@ type Voice struct {
 	FileSize int64  `json:"file_size,omitempty"`
 }
 
+// Document — файл (XLSX/CSV прайс и т.п.).
+type Document struct {
+	FileID   string `json:"file_id"`
+	FileName string `json:"file_name,omitempty"`
+	MimeType string `json:"mime_type,omitempty"`
+	FileSize int64  `json:"file_size,omitempty"`
+}
+
 // Message — сообщение.
 type Message struct {
 	MessageID int64       `json:"message_id"`
@@ -47,6 +55,7 @@ type Message struct {
 	Caption   string      `json:"caption,omitempty"`
 	Photo     []PhotoSize `json:"photo,omitempty"`
 	Voice     *Voice      `json:"voice,omitempty"`
+	Document  *Document   `json:"document,omitempty"`
 }
 
 // CallbackQuery — нажатие inline-кнопки.

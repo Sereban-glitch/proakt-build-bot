@@ -332,6 +332,70 @@ func (s *Store) AddPhoto(ctx context.Context, actID *int64, objectID int64, file
 
 // --- статистика --------------------------------------------------------------
 
+// --- прайс-лист (catalog_items, v0.3) -----------------------------------------
+
+// UpsertCatalogItem добавляет/обновляет позицию прайса (name — уже нормализован).
+func (s *Store) UpsertCatalogItem(ctx context.Context, chatID int64, name, unit string, price float64) error {
+	_, err := s.pool.Exec(ctx, `
+INSERT INTO catalog_items(chat_id, name, unit, price) VALUES($1,$2,$3,$4)
+ON CONFLICT (chat_id, name) DO UPDATE SET unit=EXCLUDED.unit, price=EXCLUDED.price`,
+		chatID, name, unit, price)
+	return err
+}
+
+// BulkUpsertCatalog импортирует позиции прайса одной транзакцией (импорт файла).
+// Возвращает число записанных строк.
+func (s *Store) BulkUpsertCatalog(ctx context.Context, chatID int64, items []domain.CatalogItem) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	n := 0
+	for _, it := range items {
+		if _, err := tx.Exec(ctx, `
+INSERT INTO catalog_items(chat_id, name, unit, price) VALUES($1,$2,$3,$4)
+ON CONFLICT (chat_id, name) DO UPDATE SET unit=EXCLUDED.unit, price=EXCLUDED.price`,
+			chatID, it.Name, it.Unit, it.Price); err != nil {
+			return 0, err
+		}
+		n++
+	}
+	return n, tx.Commit(ctx)
+}
+
+// ListCatalog — весь прайс чата (по имени).
+func (s *Store) ListCatalog(ctx context.Context, chatID int64) ([]domain.CatalogItem, error) {
+	rows, err := s.pool.Query(ctx,
+		"SELECT name, unit, price FROM catalog_items WHERE chat_id=$1 ORDER BY name", chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.CatalogItem
+	for rows.Next() {
+		var it domain.CatalogItem
+		if err := rows.Scan(&it.Name, &it.Unit, &it.Price); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// CatalogCount — число позиций прайса (для сводки).
+func (s *Store) CatalogCount(ctx context.Context, chatID int64) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, "SELECT count(*) FROM catalog_items WHERE chat_id=$1", chatID).Scan(&n)
+	return n, err
+}
+
+// ClearCatalog удаляет весь прайс чата.
+func (s *Store) ClearCatalog(ctx context.Context, chatID int64) error {
+	_, err := s.pool.Exec(ctx, "DELETE FROM catalog_items WHERE chat_id=$1", chatID)
+	return err
+}
+
 type Stats struct {
 	Objects int
 	Acts    int

@@ -63,7 +63,15 @@ type PhotoRec struct {
 	FileID   string
 	FilePath string
 	Caption  string
-	At       time.Time
+}
+
+// CatalogItem — позиция прайс-листа (цены мастера, v0.3).
+// Name хранится нормализованным (нижний регистр, ё→е, без двойных пробелов) —
+// чтобы «Штукатурка» и «штукатурка» были одной позицией.
+type CatalogItem struct {
+	Name  string
+	Unit  string
+	Price float64
 }
 
 // DraftLine — позиция в черновике (FSM), сериализуется в JSON.

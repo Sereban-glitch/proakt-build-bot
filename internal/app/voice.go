@@ -65,6 +65,24 @@ func (b *Bot) onVoiceMessage(ctx context.Context, m tg.Message) {
 		lines = lines[:200]
 	}
 
+	// v0.3: позиции без цены — дополняем из прайса, если он есть
+	filledNote := ""
+	if items, err := b.st.ListCatalog(ctx, chatID); err == nil && len(items) > 0 {
+		var missing []string
+		lines, missing = fillFromCatalog(items, lines)
+		if n := len(missing); n > 0 {
+			sh := missing
+			if len(sh) > 3 {
+				sh = sh[:3]
+			}
+			filledNote = fmt.Sprintf("\n\n⚠ Без цены (нет в прайсе): %s — продиктуй с ценой или добавь в 💵 Прайс", strings.Join(sh, ", "))
+		}
+		if len(lines) == 0 {
+			b.text(ctx, chatID, "Цены не нашёл в прайсе 🤔\nПродиктуй с ценой: «штукатурка сорок пять метров двести шестьдесят»"+filledNote)
+			return
+		}
+	}
+
 	data["voice"] = linesJSON(lines)
 	_ = b.st.SetState(ctx, chatID, stActLines, data)
 
@@ -74,6 +92,7 @@ func (b *Bot) onVoiceMessage(ctx context.Context, m tg.Message) {
 		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, describeLine(l)))
 	}
 	sb.WriteString(fmt.Sprintf("\nПозиций: %d · сумма: %s", len(lines), money(sumDraft(lines))))
+	sb.WriteString(filledNote)
 	_ = b.tg.SendMessage(ctx, chatID, sb.String(), tg.Inline(tg.KB{
 		{tg.KBButton{Text: "✅ Добавить в акт", CallbackData: "vok"},
 			tg.KBButton{Text: "❌ Отбросить", CallbackData: "vox"}},

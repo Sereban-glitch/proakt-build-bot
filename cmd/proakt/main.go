@@ -2,6 +2,7 @@
 // v0.1: объекты, акты (текстовый ввод), Excel-файлы, оплаты/долги, фото.
 // v0.2: голосовой ввод позиций через Anthropic-совместимый LLM-шлюз (/v1/messages).
 // v0.2.2: аудио блоком «image»+audio/ogg (обход ограничения конвертера шлюза) — см. internal/ai/gateway.go.
+// v0.3: прайс-лист — каталог цен, автоподстановка в акты, импорт из Excel/CSV.
 package main
 
 import (
@@ -22,7 +23,7 @@ import (
 )
 
 // version — подставляется при релизной сборке:
-// go build -ldflags "-s -w -X main.version=v0.2.2"
+// go build -ldflags "-s -w -X main.version=v0.3.0"
 var version = "dev"
 
 func main() {

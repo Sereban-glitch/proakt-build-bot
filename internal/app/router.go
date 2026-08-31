@@ -23,11 +23,14 @@ const (
 	stIdle        = "idle"     // главное меню
 	stObjName     = "obj_name" // ждём название объекта
 	stObjCustomer = "obj_customer"
-	stActObj      = "act_obj"    // выбор объекта для акта (inline)
-	stActLines    = "act_lines"  // ввод позиций
-	stPayAmount   = "pay_amount" // ввод суммы оплаты
-	stPhotoPick   = "photo_pick" // выбор привязки фото (inline)
-	stPhotoWait   = "photo_wait" // ждём само фото
+	stActObj      = "act_obj"      // выбор объекта для акта (inline)
+	stActLines    = "act_lines"    // ввод позиций
+	stPayAmount   = "pay_amount"   // ввод суммы оплаты
+	stPhotoPick   = "photo_pick"   // выбор привязки фото (inline)
+	stPhotoWait   = "photo_wait"   // ждём само фото
+	stPriceAdd    = "price_add"    // ждём строку «наименование [ед.] цена»
+	stPriceImport = "price_import" // ждём файл прайса
+	stPriceClear  = "price_clear"  // подтверждение очистки прайса
 )
 
 type Bot struct {
@@ -105,6 +108,12 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		return
 	}
 
+	// файл — импорт прайса (v0.3)
+	if m.Document != nil {
+		b.onDocumentMessage(ctx, m)
+		return
+	}
+
 	text := strings.TrimSpace(m.Text)
 	if text == "" {
 		return
@@ -143,6 +152,9 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 	case text == "/report" || text == BtnReport:
 		b.showReport(ctx, chatID)
 		return
+	case text == "/price" || text == BtnPrice:
+		b.showPriceMenu(ctx, chatID)
+		return
 	case text == BtnMore:
 		b.textKB(ctx, chatID, "Ещё:", MoreMenu())
 		return
@@ -163,6 +175,12 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		b.paymentFromText(ctx, chatID, data, text)
 	case stPhotoWait:
 		b.text(ctx, chatID, "Жду фото 📷 — просто пришли снимок (можно с подписью).")
+	case stPriceAdd:
+		b.priceAddFromText(ctx, chatID, text)
+	case stPriceImport:
+		b.text(ctx, chatID, "Жду файл прайса — Excel (.xlsx) или CSV. Или ⏹ Отмена.")
+	case stPriceClear:
+		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️")
 	default:
 		b.textKB(ctx, chatID, notUnderstood, MainMenu())
 	}
@@ -195,6 +213,35 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 	case data == "vox":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Отбросил")
 		b.discardVoiceLines(ctx, chatID, stateData)
+
+	case data == "plist":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Список")
+		b.showPriceList(ctx, chatID)
+
+	case data == "padd":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Добавить")
+		b.beginPriceAdd(ctx, chatID)
+
+	case data == "pimport":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Импорт")
+		b.beginPriceImport(ctx, chatID)
+
+	case data == "pclear":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Очистить")
+		b.beginPriceClear(ctx, chatID)
+
+	case data == "pclyes":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Удаляю")
+		if err := b.st.ClearCatalog(ctx, chatID); err != nil {
+			log.Printf("прайс: очистка чат %d: %v", chatID, err)
+		}
+		b.reset(ctx, chatID)
+		b.textKB(ctx, chatID, "🗑 Прайс очищен.", MainMenu())
+
+	case data == "pclno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.reset(ctx, chatID)
+		b.textKB(ctx, chatID, "Оставил прайс как есть.", MainMenu())
 
 	case data == "objnew":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Новый объект")
@@ -320,6 +367,9 @@ func (b *Bot) beginActLines(ctx context.Context, chatID int64, objectID int64) {
 		name = obj.Name
 	}
 	how := "Вводи позиции построчно:\nштукатурка 45 м² 260\nили: демонтаж 2000"
+	if n, err := b.st.CatalogCount(ctx, chatID); err == nil && n > 0 {
+		how += "\nили без цены: штукатурка 45 м² — возьму из прайса 💵"
+	}
 	if b.ai != nil {
 		how += "\n\nИли надиктуй голосом 🎤 — одной фразой или несколько подряд."
 	}
@@ -333,11 +383,43 @@ func (b *Bot) actLineFromText(ctx context.Context, chatID int64, data map[string
 		b.finishAct(ctx, chatID, data)
 		return
 	}
-	line, ok := parse.ParsePosition(text)
-	if !ok {
-		b.text(ctx, chatID, "Не разобрал строку 🤔\nПримеры:\nштукатурка 45 м² 260\nдемонтаж 2000")
+	// v0.3: «наименование количество [ед.]» без цены — цену ищем в прайсе
+	if name, qty, unit, ok := parse.ParseQty(text); ok {
+		if line, ok2 := b.lineFromCatalog(ctx, chatID, name, qty, unit); ok2 {
+			b.addActLine(ctx, chatID, data, line, "💡 цена из прайса")
+			return
+		}
+		b.text(ctx, chatID, fmt.Sprintf("В прайсе нет «%s» 🤔\nВведи с ценой: %s %s 260\nили добавь в прайс: 💵 Прайс → ➕ Добавить",
+			name, name, unit))
 		return
 	}
+	line, ok := parse.ParsePosition(text)
+	if !ok {
+		b.text(ctx, chatID, "Не разобрал строку 🤔\nПримеры:\nштукатурка 45 м² 260\nдемонтаж 2000\n\nИли без цены — тогда она возьмётся из прайса:\nштукатурка 45 м²")
+		return
+	}
+	b.addActLine(ctx, chatID, data, line, "")
+}
+
+// lineFromCatalog — позиция с ценой из прайса.
+func (b *Bot) lineFromCatalog(ctx context.Context, chatID int64, name string, qty float64, unit string) (domain.DraftLine, bool) {
+	items, err := b.st.ListCatalog(ctx, chatID)
+	if err != nil {
+		log.Printf("прайс: чтение чат %d: %v", chatID, err)
+		return domain.DraftLine{}, false
+	}
+	it, ok := MatchCatalog(items, name)
+	if !ok {
+		return domain.DraftLine{}, false
+	}
+	if unit == "" {
+		unit = it.Unit
+	}
+	return domain.DraftLine{Name: name, Qty: qty, Unit: unit, Price: it.Price, Sum: qty * it.Price}, true
+}
+
+// addActLine — добавить позицию в черновик и отчитаться.
+func (b *Bot) addActLine(ctx context.Context, chatID int64, data map[string]string, line domain.DraftLine, note string) {
 	lines := appendDraft(data, line)
 	if len(lines) > 200 {
 		b.text(ctx, chatID, "Лимит 200 позиций в акте — завершаем 🙃")
@@ -346,8 +428,12 @@ func (b *Bot) actLineFromText(ctx context.Context, chatID int64, data map[string
 	data["lines"] = linesJSON(lines)
 	_ = b.st.SetState(ctx, chatID, stActLines, data)
 	_ = b.tg.SendChatAction(ctx, chatID)
-	b.text(ctx, chatID, fmt.Sprintf("✅ %s\n—\nПозиций: %d · сумма: %s",
-		describeLine(line), len(lines), money(sumDraft(lines))))
+	reply := fmt.Sprintf("✅ %s\n—\nПозиций: %d · сумма: %s",
+		describeLine(line), len(lines), money(sumDraft(lines)))
+	if note != "" {
+		reply += "\n" + note
+	}
+	b.text(ctx, chatID, reply)
 }
 
 func (b *Bot) finishAct(ctx context.Context, chatID int64, data map[string]string) {
@@ -494,8 +580,9 @@ func (b *Bot) showReport(ctx context.Context, chatID int64) {
 		b.text(ctx, chatID, "Не собралась статистика 😕")
 		return
 	}
+	priceN, _ := b.st.CatalogCount(ctx, chatID)
 	b.textKB(ctx, chatID, fmt.Sprintf(
-		"📊 Сводка:\n\n🏠 Объектов: %d\n📋 Актов: %d\n📷 Фото: %d\n\nВыполнено: %s\nОплачено: %s\nДолг: %s",
-		stats.Objects, stats.Acts, stats.Photos,
+		"📊 Сводка:\n\n🏠 Объектов: %d\n📋 Актов: %d\n📷 Фото: %d\n💵 Прайс: %d позиций\n\nВыполнено: %s\nОплачено: %s\nДолг: %s",
+		stats.Objects, stats.Acts, stats.Photos, priceN,
 		money(stats.Total), money(stats.Paid), money(stats.Total-stats.Paid)), MainMenu())
 }
