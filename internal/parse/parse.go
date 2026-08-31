@@ -46,8 +46,7 @@ func toFloat(s string) (float64, bool) {
 
 // ParsePosition разбирает строку в позицию черновика.
 func ParsePosition(s string) (domain.DraftLine, bool) {
-	s = strings.TrimSpace(strings.ReplaceAll(s, "\u00a0", " "))
-	fields := strings.Fields(s)
+	fields := Tokenize(s)
 	if len(fields) == 0 {
 		return domain.DraftLine{}, false
 	}
@@ -72,12 +71,11 @@ func ParsePosition(s string) (domain.DraftLine, bool) {
 		if name == "" {
 			return domain.DraftLine{}, false
 		}
-		// единица — поле сразу после количества (короткое и не число)
+		// единица — поле сразу после количества (известная единица, канонично)
 		unit := ""
 		if qtyIdx+1 < priceIdx {
-			cand := fields[qtyIdx+1]
-			if !isNumber(cand) && len([]rune(cand)) <= 8 {
-				unit = cand
+			if u := NormalizeUnit(fields[qtyIdx+1]); u != "" {
+				unit = u
 			}
 		}
 		line = domain.DraftLine{Name: name, Qty: qty, Unit: unit, Price: price, Sum: qty * price}

@@ -57,6 +57,12 @@ func (b *Bot) onVoiceMessage(ctx context.Context, m tg.Message) {
 		log.Printf("голос: позиции чат %d: %v", chatID, err)
 		lines = localParseLines(transcript)
 	}
+	// v0.3.6: единицы к канону («м2» → «м²»), как в текстовом вводе
+	for i := range lines {
+		if u := parse.NormalizeUnit(lines[i].Unit); u != "" {
+			lines[i].Unit = u
+		}
+	}
 	if len(lines) == 0 {
 		b.text(ctx, chatID, "Не выделил позиции 🤔 Продиктуй медленнее или введи текстом:\nштукатурка 45 м² 260")
 		return
@@ -67,7 +73,8 @@ func (b *Bot) onVoiceMessage(ctx context.Context, m tg.Message) {
 
 	// v0.3: позиции без цены — дополняем из прайса, если он есть
 	filledNote := ""
-	if items, err := b.st.ListCatalog(ctx, chatID); err == nil && len(items) > 0 {
+	items, catErr := b.st.ListCatalog(ctx, chatID)
+	if catErr == nil && len(items) > 0 {
 		var missing []string
 		lines, missing = fillFromCatalog(items, lines)
 		if n := len(missing); n > 0 {
@@ -81,6 +88,9 @@ func (b *Bot) onVoiceMessage(ctx context.Context, m tg.Message) {
 			b.text(ctx, chatID, "Цены не нашёл в прайсе 🤔\nПродиктуй с ценой: «штукатурка сорок пять метров двести шестьдесят»"+filledNote)
 			return
 		}
+	} else if n, _ := zeroPriceLines(lines); n > 0 {
+		// v0.3.6: прайс пуст — говорим прямо, а не молчим (иначе акт выйдет на 0 грн)
+		filledNote = "\n\n⚠ Позиции без цены: прайс пуст. Загрузи его (💵 Прайс → 📥 Импорт из файла) или диктуй с ценой."
 	}
 
 	data["voice"] = linesJSON(lines)

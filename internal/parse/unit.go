@@ -46,8 +46,7 @@ func NormName(s string) string {
 //	"штукатурка м² 45" → то же (единица до числа тоже понимаем)
 //	"демонтаж 2000"    → false (это сумма, не количество)
 func ParseQty(s string) (name string, qty float64, unit string, ok bool) {
-	s = strings.TrimSpace(strings.ReplaceAll(s, "\u00a0", " "))
-	fields := strings.Fields(s)
+	fields := Tokenize(s)
 	var numIdx []int
 	for i, f := range fields {
 		if isNumber(f) {
@@ -95,8 +94,7 @@ func ParseQty(s string) (name string, qty float64, unit string, ok bool) {
 //	"штукатурка м² 260"     → (штукатурка, м², 260)
 //	"демонтаж стен 2000"    → (демонтаж стен, "", 2000)
 func ParseCatalogItem(s string) (domain.CatalogItem, bool) {
-	s = strings.TrimSpace(strings.ReplaceAll(s, "\u00a0", " "))
-	fields := strings.Fields(s)
+	fields := Tokenize(s)
 	if len(fields) < 2 {
 		return domain.CatalogItem{}, false
 	}

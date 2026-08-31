@@ -308,6 +308,20 @@ func (s *Store) ActLines(ctx context.Context, actID int64) ([]domain.ActLine, er
 
 // --- оплаты -----------------------------------------------------------------
 
+// DeleteAct — удалить акт (v0.3.6): позиции и оплаты уходят каскадом
+// (ON DELETE CASCADE), фото отвязываются от акта и остаются у объекта
+// (ON DELETE SET NULL). Возвращает бриф удалённого акта для отчёта.
+func (s *Store) DeleteAct(ctx context.Context, actID int64) (domain.ActBrief, error) {
+	brief, err := s.GetAct(ctx, actID)
+	if err != nil {
+		return brief, err
+	}
+	if _, err := s.pool.Exec(ctx, "DELETE FROM acts WHERE id=$1", actID); err != nil {
+		return brief, err
+	}
+	return brief, nil
+}
+
 func (s *Store) CreatePayment(ctx context.Context, actID int64, amount float64, note string) error {
 	_, err := s.pool.Exec(ctx, "INSERT INTO payments(act_id, amount, note) VALUES($1,$2,$3)", actID, amount, note)
 	return err

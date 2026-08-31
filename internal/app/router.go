@@ -34,6 +34,7 @@ const (
 	stPriceFind    = "price_find"   // ждём слово для поиска по прайсу (v0.3.5)
 	stPriceDel     = "price_del"    // ждём название позиции для удаления (v0.3.5)
 	stPriceDelConf = "price_del_ok" // подтверждение удаления одной позиции (v0.3.5)
+	stActDelConf   = "act_del_ok"   // подтверждение удаления акта (v0.3.6)
 )
 
 type Bot struct {
@@ -217,6 +218,8 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		b.priceDelFromText(ctx, chatID, text)
 	case stPriceDelConf:
 		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️ (или ⏹ Отмена)")
+	case stActDelConf:
+		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️ (или ⏹ Отмена)")
 	default:
 		b.textKB(ctx, chatID, notUnderstood, MainMenu())
 	}
@@ -335,6 +338,37 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "К объекту")
 		objID, _ := strconv.ParseInt(strings.TrimPrefix(data, "pho:"), 10, 64)
 		b.attachPhoto(ctx, chatID, stateData, nil, objID)
+
+	case data == "finyes": // v0.3.6: завершили акт с позициями без цены осознанно
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Завершаю")
+		state, data2, _ := b.st.State(ctx, chatID)
+		if state != stActLines {
+			b.text(ctx, chatID, "Черновик уже не активен — начни заново: /new")
+			return
+		}
+		lines := parseDraft(data2["lines"])
+		if len(lines) == 0 {
+			b.text(ctx, chatID, "Позиций нет — вводи заново: /new")
+			return
+		}
+		b.finishActDo(ctx, chatID, data2, lines)
+
+	case data == "finno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Продолжаем")
+		b.textKB(ctx, chatID, "Продолжай ввод 👀 Черновик покажет всё, ↩️ уберёт последнюю.", ActMenu())
+
+	case strings.HasPrefix(data, "adel:"): // v0.3.6: удаление ошибочного акта
+		actID, _ := strconv.ParseInt(strings.TrimPrefix(data, "adel:"), 10, 64)
+		b.confirmDeleteAct(ctx, chatID, cq.ID, actID)
+
+	case data == "adelyes":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Удаляю")
+		b.deleteActDo(ctx, chatID)
+
+	case data == "adelno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.reset(ctx, chatID)
+		b.textKB(ctx, chatID, "Акт на месте 📋 Список: /acts", MainMenu())
 
 	default:
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "")
@@ -532,6 +566,8 @@ func (b *Bot) beginActLines(ctx context.Context, chatID int64, objectID int64) {
 	how := "Вводи позиции построчно:\nштукатурка 45 м² 260\nили: демонтаж 2000"
 	if n, err := b.st.CatalogCount(ctx, chatID); err == nil && n > 0 {
 		how += "\nили без цены: штукатурка 45 м² — возьму из прайса 💵"
+	} else {
+		how += "\n\n💡 Прайс пуст: позиция без цены станет 0 грн.\nЗагрузи свои цены: 💵 Прайс → 📥 Импорт из файла."
 	}
 	if b.ai != nil {
 		how += "\n\nИли надиктуй голосом 🎤 — одной фразой или несколько подряд."
@@ -547,6 +583,15 @@ func (b *Bot) actLineFromText(ctx context.Context, chatID int64, data map[string
 		b.finishAct(ctx, chatID, data)
 		return
 	}
+	// v0.3.6: несколько позиций в одной строке — «шлифовка 45 м грунтовка 45 м»
+	if lines, fromCat, isMulti := b.parseMultiPosition(ctx, chatID, text); isMulti {
+		if len(lines) > 0 {
+			b.addActLines(ctx, chatID, data, lines, fromCat)
+			return
+		}
+		b.text(ctx, chatID, multiFailText)
+		return
+	}
 	// v0.3: «наименование количество [ед.]» без цены — цену ищем в прайсе
 	if name, qty, unit, ok := parse.ParseQty(text); ok {
 		if line, ok2 := b.lineFromCatalog(ctx, chatID, name, qty, unit); ok2 {
@@ -560,6 +605,12 @@ func (b *Bot) actLineFromText(ctx context.Context, chatID int64, data map[string
 	line, ok := parse.ParsePosition(text)
 	if !ok {
 		b.text(ctx, chatID, "Не разобрал строку 🤔\nПримеры:\nштукатурка 45 м² 260\nдемонтаж 2000\n\nИли без цены — тогда она возьмётся из прайса:\nштукатурка 45 м²")
+		return
+	}
+	// v0.3.6: «двусмысленные» строки (несколько чисел с словами между ними)
+	// не разбираем молча — количество/цена наугад = неверные деньги в акте
+	if parse.SuspiciousMulti(text) {
+		b.text(ctx, chatID, suspiciousText)
 		return
 	}
 	b.addActLine(ctx, chatID, data, line, "")
@@ -606,6 +657,25 @@ func (b *Bot) finishAct(ctx context.Context, chatID int64, data map[string]strin
 		b.text(ctx, chatID, "Позиций пока нет — вводи хотя бы одну строкой.")
 		return
 	}
+	// v0.3.6: позиции без цены — акт выйдет на 0 грн; не молчим, а спрашиваем
+	if n, names := zeroPriceLines(lines); n > 0 {
+		sh := names
+		if len(sh) > 3 {
+			sh = sh[:3]
+		}
+		b.textKB(ctx, chatID, fmt.Sprintf(
+			"⚠️ В акте %d из %d позиций без цены (в акте станет 0 грн):\n• %s\n\nКак быть?",
+			n, len(lines), strings.Join(sh, "\n• ")), tg.Inline(tg.KB{
+			{tg.KBButton{Text: "✅ Завершить как есть", CallbackData: "finyes"}},
+			{tg.KBButton{Text: "✍️ Продолжить ввод", CallbackData: "finno"}},
+		}))
+		return
+	}
+	b.finishActDo(ctx, chatID, data, lines)
+}
+
+// finishActDo — само завершение: объект, запись, XLSX, сводка.
+func (b *Bot) finishActDo(ctx context.Context, chatID int64, data map[string]string, lines []domain.DraftLine) {
 	objID, _ := strconv.ParseInt(data["object_id"], 10, 64)
 	obj, err := b.st.GetObject(ctx, objID)
 	if err != nil {
@@ -716,25 +786,7 @@ func (b *Bot) paymentFromText(ctx context.Context, chatID int64, data map[string
 	}
 }
 
-// --- акты (список) --------------------------------------------------------------
-
-func (b *Bot) showActs(ctx context.Context, chatID int64) {
-	acts, err := b.st.ListActs(ctx, chatID, 20)
-	if err != nil || len(acts) == 0 {
-		b.textKB(ctx, chatID, "Актов пока нет. Создай первый: 📋 Новый акт", MainMenu())
-		return
-	}
-	var sb strings.Builder
-	sb.WriteString("📋 Последние акты:\n\n")
-	for _, a := range acts {
-		status := "✅ оплачен"
-		if a.Balance() > 0.009 {
-			status = "долг " + money(a.Balance())
-		}
-		sb.WriteString(fmt.Sprintf("• №%d (%s) — %s · %s\n", a.ActNo, a.ObjectName, money(a.Total), status))
-	}
-	b.textKB(ctx, chatID, sb.String(), MainMenu())
-}
+// --- акты (список и удаление) — см. acts.go ----------------------------------------
 
 // --- отчёт -----------------------------------------------------------------------
 

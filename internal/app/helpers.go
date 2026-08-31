@@ -51,6 +51,20 @@ func sumDraft(lines []domain.DraftLine) float64 {
 	return sum
 }
 
+// zeroPriceLines — позиции без цены (цена не названа, а в прайсе её нет):
+// сколько их и как называются (v0.3.6 — защита от «акта на 0 грн»).
+func zeroPriceLines(lines []domain.DraftLine) (int, []string) {
+	n := 0
+	var names []string
+	for _, l := range lines {
+		if l.Price == 0 {
+			n++
+			names = append(names, l.Name)
+		}
+	}
+	return n, names
+}
+
 func draftToLines(lines []domain.DraftLine) []domain.ActLine {
 	out := make([]domain.ActLine, 0, len(lines))
 	for i, l := range lines {
