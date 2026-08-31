@@ -1,9 +1,9 @@
 # Секреты — не в git никогда
 .env
 
-# Артефакты сборки
-proakt
-proakt.new
+# Артефакты сборки (якорь к корню: НЕ должен глотать каталог cmd/proakt/)
+/proakt
+/proakt.new
 *.test
 coverage.out
 
