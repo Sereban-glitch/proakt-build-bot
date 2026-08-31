@@ -67,3 +67,25 @@ func TestFillFromCatalogEmptyUnit(t *testing.T) {
 		t.Errorf("юнит из прайса: %+v", out[0])
 	}
 }
+
+func TestSearchCatalog(t *testing.T) {
+	items := catalog()
+	cases := []struct {
+		query string
+		wantN int
+	}{
+		{"штукатурка", 2}, // «штукатурка» + «штукатурка откосов»
+		{"Штукатурка", 2}, // регистр неважен
+		{"демонтаж", 1},
+		{"стеклохолст", 1}, // вхождение в название позиции
+		{"электрика", 0},
+		{"", 0},
+		{"м", 0}, // слишком короткий запрос — не ищем
+	}
+	for _, c := range cases {
+		got := searchCatalog(items, c.query)
+		if len(got) != c.wantN {
+			t.Errorf("searchCatalog(%q) = %d позиций (%v), хочу %d", c.query, len(got), got, c.wantN)
+		}
+	}
+}

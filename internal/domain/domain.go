@@ -65,6 +65,18 @@ type PhotoRec struct {
 	Caption  string
 }
 
+// ObjectBrief — объект с итогами по актам (для списка «объекты с деньгами», v0.3.5):
+// строитель видит предварительный итог по каждому объекту, не открывая акты.
+type ObjectBrief struct {
+	Object
+	Acts  int
+	Total float64
+	Paid  float64
+}
+
+// Debt — сколько осталось оплатить по объекту.
+func (o ObjectBrief) Debt() float64 { return o.Total - o.Paid }
+
 // CatalogItem — позиция прайс-листа (цены мастера, v0.3).
 // Name хранится нормализованным (нижний регистр, ё→е, без двойных пробелов) —
 // чтобы «Штукатурка» и «штукатурка» были одной позицией.

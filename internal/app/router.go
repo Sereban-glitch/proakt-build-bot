@@ -20,17 +20,20 @@ import (
 
 // Состояния FSM.
 const (
-	stIdle        = "idle"     // главное меню
-	stObjName     = "obj_name" // ждём название объекта
-	stObjCustomer = "obj_customer"
-	stActObj      = "act_obj"      // выбор объекта для акта (inline)
-	stActLines    = "act_lines"    // ввод позиций
-	stPayAmount   = "pay_amount"   // ввод суммы оплаты
-	stPhotoPick   = "photo_pick"   // выбор привязки фото (inline)
-	stPhotoWait   = "photo_wait"   // ждём само фото
-	stPriceAdd    = "price_add"    // ждём строку «наименование [ед.] цена»
-	stPriceImport = "price_import" // ждём файл прайса
-	stPriceClear  = "price_clear"  // подтверждение очистки прайса
+	stIdle         = "idle"     // главное меню
+	stObjName      = "obj_name" // ждём название объекта
+	stObjCustomer  = "obj_customer"
+	stActObj       = "act_obj"      // выбор объекта для акта (inline)
+	stActLines     = "act_lines"    // ввод позиций
+	stPayAmount    = "pay_amount"   // ввод суммы оплаты
+	stPhotoPick    = "photo_pick"   // выбор привязки фото (inline)
+	stPhotoWait    = "photo_wait"   // ждём само фото
+	stPriceAdd     = "price_add"    // ждём строку «наименование [ед.] цена»
+	stPriceImport  = "price_import" // ждём файл прайса
+	stPriceClear   = "price_clear"  // подтверждение очистки прайса
+	stPriceFind    = "price_find"   // ждём слово для поиска по прайсу (v0.3.5)
+	stPriceDel     = "price_del"    // ждём название позиции для удаления (v0.3.5)
+	stPriceDelConf = "price_del_ok" // подтверждение удаления одной позиции (v0.3.5)
 )
 
 type Bot struct {
@@ -124,6 +127,9 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 	// команды работают из любого состояния
 	switch {
 	case text == "/start":
+		if b.guardDraft(ctx, chatID) {
+			return
+		}
 		b.reset(ctx, chatID)
 		b.textKB(ctx, chatID, b.welcome(), MainMenu())
 		return
@@ -131,11 +137,20 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		b.textKB(ctx, chatID, b.help(), MainMenu())
 		return
 	case text == "/cancel" || text == BtnCancel || isCancelText(text):
+		if b.guardDraft(ctx, chatID) {
+			return
+		}
 		b.reset(ctx, chatID)
 		b.textKB(ctx, chatID, "Отменил. Возвращаюсь в меню.", MainMenu())
 		return
 	case text == "/new" || text == BtnNewAct:
+		if b.guardDraft(ctx, chatID) {
+			return
+		}
 		b.startNewAct(ctx, chatID)
+		return
+	case text == "/draft":
+		b.showDraft(ctx, chatID)
 		return
 	case text == "/debts" || text == BtnDebts:
 		b.showDebts(ctx, chatID)
@@ -147,6 +162,9 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		b.showObjects(ctx, chatID)
 		return
 	case text == "/photo" || text == BtnPhoto:
+		if b.guardDraft(ctx, chatID) {
+			return
+		}
 		b.startPhotoWait(ctx, chatID)
 		return
 	case text == "/report" || text == BtnReport:
@@ -154,6 +172,9 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		return
 	case text == "/price" || text == BtnPrice:
 		b.showPriceMenu(ctx, chatID)
+		return
+	case strings.HasPrefix(text, "/price "):
+		b.priceFindFromText(ctx, chatID, strings.TrimSpace(strings.TrimPrefix(text, "/price")))
 		return
 	case text == BtnMore:
 		b.textKB(ctx, chatID, "Ещё:", MoreMenu())
@@ -170,6 +191,15 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 	case stObjCustomer:
 		b.setObjectCustomer(ctx, chatID, data, text)
 	case stActLines:
+		// v0.3.5: контроль черновика — убрать последнюю / показать всё
+		if text == BtnUndo || isUndoText(text) {
+			b.undoLastDraft(ctx, chatID, data)
+			return
+		}
+		if text == BtnDraft || isDraftText(text) {
+			b.showDraft(ctx, chatID)
+			return
+		}
 		b.actLineFromText(ctx, chatID, data, text)
 	case stPayAmount:
 		b.paymentFromText(ctx, chatID, data, text)
@@ -181,6 +211,12 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		b.text(ctx, chatID, "Жду файл прайса — Excel (.xlsx) или CSV. Или ⏹ Отмена.")
 	case stPriceClear:
 		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️")
+	case stPriceFind:
+		b.priceFindFromText(ctx, chatID, text)
+	case stPriceDel:
+		b.priceDelFromText(ctx, chatID, text)
+	case stPriceDelConf:
+		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️ (или ⏹ Отмена)")
 	default:
 		b.textKB(ctx, chatID, notUnderstood, MainMenu())
 	}
@@ -203,8 +239,20 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 	switch {
 	case data == "cancel":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Отмена")
+		if b.guardDraft(ctx, chatID) {
+			return
+		}
 		b.reset(ctx, chatID)
 		b.textKB(ctx, chatID, "Отменил. Главное меню.", MainMenu())
+
+	case data == "dripyes":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Выбросил")
+		b.reset(ctx, chatID)
+		b.textKB(ctx, chatID, "🗑 Черновик выброшен. Главное меню.", MainMenu())
+
+	case data == "dripcno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Продолжаем")
+		b.textKB(ctx, chatID, "👷 Продолжай вводить позиции — или ✅ Завершить акт.", ActMenu())
 
 	case data == "vok":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Добавляю")
@@ -218,9 +266,26 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Список")
 		b.showPriceList(ctx, chatID)
 
+	case data == "pfind":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Поиск")
+		b.beginPriceFind(ctx, chatID)
+
 	case data == "padd":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Добавить")
 		b.beginPriceAdd(ctx, chatID)
+
+	case data == "pdel":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Убрать позицию")
+		b.beginPriceDel(ctx, chatID)
+
+	case data == "pdelyes":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Убираю")
+		b.priceDelConfirm(ctx, chatID, stateData["del_name"])
+
+	case data == "pdelno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.reset(ctx, chatID)
+		b.textKB(ctx, chatID, "Оставил позицию в прайсе.", priceMenu())
 
 	case data == "pimport":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Импорт")
@@ -281,6 +346,92 @@ func (b *Bot) reset(ctx context.Context, chatID int64) {
 	_ = b.st.SetState(ctx, chatID, stIdle, map[string]string{})
 }
 
+// --- контроль черновика (v0.3.5, «линза строителя») -----------------------------
+
+// guardDraft — защита от потери черновика: если идёт ввод позиций и они уже есть,
+// вместо молчаливого сброса спрашиваем подтверждение. true = спросили, действие отложено.
+// Строитель надиктовал 20 минут голосом — /start не должен выбрасывать это в никуда.
+func (b *Bot) guardDraft(ctx context.Context, chatID int64) bool {
+	state, data, _ := b.st.State(ctx, chatID)
+	if state != stActLines {
+		return false
+	}
+	lines := parseDraft(data["lines"])
+	if len(lines) == 0 {
+		return false
+	}
+	b.textKB(ctx, chatID, fmt.Sprintf(
+		"⚠️ В черновике акта %d позиций на %s — ввод ещё не завершён.\n\nТочно выбросить?",
+		len(lines), money(sumDraft(lines))), tg.Inline(tg.KB{
+		{tg.KBButton{Text: "🗑 Выбросить черновик", CallbackData: "dripyes"}},
+		{tg.KBButton{Text: "👷 Продолжить ввод", CallbackData: "dripcno"}},
+	}))
+	return true
+}
+
+// undoLastDraft — «↩️ Убрать последнюю»: ошибка при вводе — не начинать акт заново.
+func (b *Bot) undoLastDraft(ctx context.Context, chatID int64, data map[string]string) {
+	rest, removed, ok := removeLastDraft(data)
+	if !ok {
+		b.text(ctx, chatID, "Черновик пуст — нечего убирать. Введи позицию строкой или голосом 🎤")
+		return
+	}
+	data["lines"] = linesJSON(rest)
+	_ = b.st.SetState(ctx, chatID, stActLines, data)
+	var sb strings.Builder
+	sb.WriteString("↩️ Убрал:\n" + describeLine(removed))
+	if len(rest) > 0 {
+		sb.WriteString(fmt.Sprintf("\n—\nОсталось: %d позиций · %s", len(rest), money(sumDraft(rest))))
+	} else {
+		sb.WriteString("\n—\nЧерновик пуст — вводи заново.")
+	}
+	b.text(ctx, chatID, sb.String())
+}
+
+// showDraft — «👀 Черновик» (/draft): все позиции акта в работе + промежуточная сумма.
+// Это и есть «предварительный акт» строителя: сколько уже набежало по объекту.
+func (b *Bot) showDraft(ctx context.Context, chatID int64) {
+	state, data, _ := b.st.State(ctx, chatID)
+	lines := parseDraft(data["lines"])
+	if state != stActLines {
+		b.textKB(ctx, chatID, "Черновика нет. Начать акт: 📋 Новый акт", MainMenu())
+		return
+	}
+	if len(lines) == 0 {
+		// ввод уже начат (объект выбран) — не сбиваем с толку «черновика нет»
+		b.textKB(ctx, chatID, "В акте пока нет позиций — вводи первую строкой или голосом 🎤", ActMenu())
+		return
+	}
+	objName := "объект"
+	if id, err := strconv.ParseInt(data["object_id"], 10, 64); err == nil {
+		if o, err := b.st.GetObject(ctx, id); err == nil {
+			objName = o.Name
+		}
+	}
+	// чанками по 40 позиций — лимит Telegram 4096 символов на сообщение
+	const chunk = 40
+	for start := 0; start < len(lines); start += chunk {
+		end := start + chunk
+		if end > len(lines) {
+			end = len(lines)
+		}
+		var sb strings.Builder
+		if start == 0 {
+			sb.WriteString(fmt.Sprintf("👀 Черновик акта — «%s»:\n\n", objName))
+		}
+		for i := start; i < end; i++ {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, describeLine(lines[i])))
+		}
+		if end == len(lines) {
+			sb.WriteString(fmt.Sprintf("\nПозиций: %d · сумма: %s\n✅ Завершить акт — пришлю Excel · ↩️ Убрать последнюю — если ошибся",
+				len(lines), money(sumDraft(lines))))
+			b.textKB(ctx, chatID, sb.String(), ActMenu())
+		} else {
+			b.text(ctx, chatID, sb.String())
+		}
+	}
+}
+
 // --- объекты -----------------------------------------------------------------
 
 func (b *Bot) beginObject(ctx context.Context, chatID int64, data map[string]string) {
@@ -336,7 +487,19 @@ func (b *Bot) showObjects(ctx context.Context, chatID int64) {
 	sb.WriteString("🏠 Твои объекты:\n\n")
 	for _, o := range objs {
 		sb.WriteString(fmt.Sprintf("• %s%s\n", o.Name, custSuffix(o.Customer)))
+		if o.Acts > 0 {
+			line := fmt.Sprintf("   актов %d · выполнено %s", o.Acts, money(o.Total))
+			if o.Debt() > 0.009 {
+				line += fmt.Sprintf(" · долг %s", money(o.Debt()))
+			} else if o.Paid > 0.009 {
+				line += " · оплачено ✅"
+			}
+			sb.WriteString(line + "\n")
+		} else {
+			sb.WriteString("   актов ещё нет\n")
+		}
 	}
+	sb.WriteString("\n(это предварительные итоги — акты появляются по ходу работ)")
 	b.textKB(ctx, chatID, sb.String(), tg.Inline(tg.KB{{tg.KBButton{Text: BtnNewObj, CallbackData: "objnew"}}}))
 }
 
@@ -373,6 +536,7 @@ func (b *Bot) beginActLines(ctx context.Context, chatID int64, objectID int64) {
 	if b.ai != nil {
 		how += "\n\nИли надиктуй голосом 🎤 — одной фразой или несколько подряд."
 	}
+	how += "\nОшибся — ↩️ Убрать последнюю. Посмотреть всё — 👀 Черновик."
 	how += "\n\nКогда закончишь — жми ✅ Завершить акт (или напиши «завершить»)."
 	b.textKB(ctx, chatID, fmt.Sprintf("📋 Акт для «%s».\n\n%s", name, how), ActMenu())
 }

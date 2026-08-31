@@ -3,11 +3,13 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"proakt/internal/domain"
@@ -175,17 +177,25 @@ func (s *Store) CreateObject(ctx context.Context, chatID int64, name, customer s
 	return o, err
 }
 
-func (s *Store) ListObjects(ctx context.Context, chatID int64) ([]domain.Object, error) {
-	rows, err := s.pool.Query(ctx,
-		"SELECT id, chat_id, name, customer, status, created_at FROM objects WHERE chat_id=$1 AND status='active' ORDER BY id", chatID)
+// ListObjects — объекты чата с итогами по актам (v0.3.5: «предварительный итог»
+// по каждому объекту — сколько выполнено и сколько должны).
+func (s *Store) ListObjects(ctx context.Context, chatID int64) ([]domain.ObjectBrief, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT o.id, o.chat_id, o.name, o.customer, o.status, o.created_at,
+  (SELECT count(*) FROM acts a WHERE a.object_id = o.id),
+  COALESCE((SELECT SUM(l.sum) FROM act_lines l JOIN acts a ON a.id = l.act_id WHERE a.object_id = o.id), 0),
+  COALESCE((SELECT SUM(p.amount) FROM payments p JOIN acts a ON a.id = p.act_id WHERE a.object_id = o.id), 0)
+FROM objects o
+WHERE o.chat_id = $1 AND o.status = 'active'
+ORDER BY o.id`, chatID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.Object
+	var out []domain.ObjectBrief
 	for rows.Next() {
-		var o domain.Object
-		if err := rows.Scan(&o.ID, &o.ChatID, &o.Name, &o.Customer, &o.Status, &o.CreatedAt); err != nil {
+		var o domain.ObjectBrief
+		if err := rows.Scan(&o.ID, &o.ChatID, &o.Name, &o.Customer, &o.Status, &o.CreatedAt, &o.Acts, &o.Total, &o.Paid); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
@@ -335,12 +345,30 @@ func (s *Store) AddPhoto(ctx context.Context, actID *int64, objectID int64, file
 // --- прайс-лист (catalog_items, v0.3) -----------------------------------------
 
 // UpsertCatalogItem добавляет/обновляет позицию прайса (name — уже нормализован).
-func (s *Store) UpsertCatalogItem(ctx context.Context, chatID int64, name, unit string, price float64) error {
-	_, err := s.pool.Exec(ctx, `
+// Возвращает прежнюю цену, если позиция уже была, — бот показывает «было → стало»,
+// чтобы обновление цены не проходило молча (анти-дрейф, v0.3.5).
+func (s *Store) UpsertCatalogItem(ctx context.Context, chatID int64, name, unit string, price float64) (prevPrice float64, existed bool, err error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	var prev sql.NullFloat64
+	err = tx.QueryRow(ctx, "SELECT price FROM catalog_items WHERE chat_id=$1 AND name=$2", chatID, name).Scan(&prev)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, err
+	}
+	if _, err := tx.Exec(ctx, `
 INSERT INTO catalog_items(chat_id, name, unit, price) VALUES($1,$2,$3,$4)
 ON CONFLICT (chat_id, name) DO UPDATE SET unit=EXCLUDED.unit, price=EXCLUDED.price`,
-		chatID, name, unit, price)
-	return err
+		chatID, name, unit, price); err != nil {
+		return 0, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, false, err
+	}
+	return prev.Float64, prev.Valid, nil
 }
 
 // BulkUpsertCatalog импортирует позиции прайса одной транзакцией (импорт файла).
@@ -388,6 +416,25 @@ func (s *Store) CatalogCount(ctx context.Context, chatID int64) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, "SELECT count(*) FROM catalog_items WHERE chat_id=$1", chatID).Scan(&n)
 	return n, err
+}
+
+// DeleteCatalogItem удаляет одну позицию прайса и возвращает её (для отчёта
+// «убрал: штукатурка, было 260»). ok=false — позиции с таким именем не было.
+func (s *Store) DeleteCatalogItem(ctx context.Context, chatID int64, name string) (domain.CatalogItem, bool, error) {
+	var it domain.CatalogItem
+	rows, err := s.pool.Query(ctx,
+		"DELETE FROM catalog_items WHERE chat_id=$1 AND name=$2 RETURNING name, unit, price", chatID, name)
+	if err != nil {
+		return it, false, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return it, false, rows.Err()
+	}
+	if err := rows.Scan(&it.Name, &it.Unit, &it.Price); err != nil {
+		return it, false, err
+	}
+	return it, true, rows.Err()
 }
 
 // ClearCatalog удаляет весь прайс чата.

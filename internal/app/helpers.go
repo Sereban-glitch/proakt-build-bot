@@ -31,6 +31,18 @@ func appendDraft(data map[string]string, line domain.DraftLine) []domain.DraftLi
 	return lines
 }
 
+// removeLastDraft — убрать последнюю позицию черновика (v0.3.5, «линза строителя»:
+// ошибся количеством на объекте — не начинай акт заново, просто убери строку).
+// Возвращает оставшиеся позиции и убранную (ok=false — черновик пуст).
+func removeLastDraft(data map[string]string) (rest []domain.DraftLine, removed domain.DraftLine, ok bool) {
+	lines := parseDraft(data["lines"])
+	if len(lines) == 0 {
+		return nil, domain.DraftLine{}, false
+	}
+	last := lines[len(lines)-1]
+	return lines[:len(lines)-1], last, true
+}
+
 func sumDraft(lines []domain.DraftLine) float64 {
 	var sum float64
 	for _, l := range lines {
@@ -119,6 +131,31 @@ func isCancelText(s string) bool {
 	s = strings.Trim(s, " !.,…⏹")
 	switch s {
 	case "отмена", "отменить", "отмени", "стоп", "cancel":
+		return true
+	}
+	return false
+}
+
+// isUndoText — «убрать последнюю», набранная обычным текстом (v0.3.5).
+func isUndoText(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(s, "\u00a0", " ")))
+	s = strings.Trim(s, " !.,…↩️")
+	switch s {
+	case "убрать", "убрать последнюю", "убрать последнюю позицию", "убрать позицию",
+		"отменить последнюю", "удалить последнюю", "удали последнюю",
+		"не так", "ошибся", "ошибка", "undo":
+		return true
+	}
+	return false
+}
+
+// isDraftText — «покажи черновик», набранный обычным текстом (v0.3.5).
+func isDraftText(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(s, "\u00a0", " ")))
+	s = strings.Trim(s, " !.,…👀")
+	switch s {
+	case "черновик", "покажи черновик", "покажи акт", "что в акте", "что уже есть",
+		"список позиций", "показать позиции", "draft":
 		return true
 	}
 	return false
