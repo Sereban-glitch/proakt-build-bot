@@ -215,6 +215,20 @@ func (s *Store) GetObject(ctx context.Context, id int64) (domain.Object, error) 
 	return o, nil
 }
 
+// ArchiveObject — убрать объект из меню (status='archived', v0.3.8).
+// Мягкое удаление: акты, оплаты и фото остаются в /acts и /report —
+// ничего не теряется, объект просто исчезает из списков выбора.
+func (s *Store) ArchiveObject(ctx context.Context, chatID, objID int64) (string, error) {
+	var name string
+	err := s.pool.QueryRow(ctx,
+		"UPDATE objects SET status='archived' WHERE id=$1 AND chat_id=$2 RETURNING name", objID, chatID).
+		Scan(&name)
+	if err != nil {
+		return "", ErrNotFound
+	}
+	return name, nil
+}
+
 // --- акты -------------------------------------------------------------------
 
 func (s *Store) CreateAct(ctx context.Context, objectID int64, lines []domain.DraftLine) (domain.Act, error) {
@@ -311,6 +325,33 @@ func (s *Store) ActLines(ctx context.Context, actID int64) ([]domain.ActLine, er
 
 // --- оплаты -----------------------------------------------------------------
 
+// GetPayment — оплата по id (только своего чата) с контекстом акта (v0.3.8).
+func (s *Store) GetPayment(ctx context.Context, chatID, payID int64) (domain.PaymentRec, error) {
+	var p domain.PaymentRec
+	err := s.pool.QueryRow(ctx, `
+SELECT p.id, p.act_id, p.amount, p.created_at, a.act_no, o.name
+FROM payments p JOIN acts a ON a.id = p.act_id JOIN objects o ON o.id = a.object_id
+WHERE p.id = $1 AND o.chat_id = $2`, payID, chatID).
+		Scan(&p.ID, &p.ActID, &p.Amount, &p.At, &p.ActNo, &p.ObjName)
+	if err != nil {
+		return p, ErrNotFound
+	}
+	return p, nil
+}
+
+// DeletePayment — убрать ошибочную оплату (v0.3.8: «записал 100000 вместо 10000» —
+// долг в отчёте тут же вернётся к правде). Возвращает запись для отчёта.
+func (s *Store) DeletePayment(ctx context.Context, chatID, payID int64) (domain.PaymentRec, error) {
+	p, err := s.GetPayment(ctx, chatID, payID)
+	if err != nil {
+		return p, err
+	}
+	if _, err := s.pool.Exec(ctx, "DELETE FROM payments WHERE id=$1 AND act_id=$2", p.ID, p.ActID); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
 // DeleteAct — удалить акт (v0.3.6): позиции и оплаты уходят каскадом
 // (ON DELETE CASCADE), фото отвязываются от акта и остаются у объекта
 // (ON DELETE SET NULL). Возвращает бриф удалённого акта для отчёта.
@@ -355,6 +396,34 @@ func (s *Store) AddPhoto(ctx context.Context, actID *int64, objectID int64, file
 		"INSERT INTO photos(act_id, object_id, file_id, file_path, caption) VALUES($1,$2,$3,$4,$5)",
 		actID, objectID, fileID, filePath, caption)
 	return err
+}
+
+// GetPhoto — фото по id (только своего чата) для подтверждения удаления (v0.3.8).
+func (s *Store) GetPhoto(ctx context.Context, chatID, id int64) (domain.PhotoRec, error) {
+	var p domain.PhotoRec
+	err := s.pool.QueryRow(ctx, `
+SELECT ph.id, ph.act_id, ph.object_id, ph.file_id, ph.file_path, ph.caption, ph.created_at,
+  COALESCE(a.act_no, 0)
+FROM photos ph JOIN objects o ON o.id = ph.object_id LEFT JOIN acts a ON a.id = ph.act_id
+WHERE ph.id = $1 AND o.chat_id = $2`, id, chatID).
+		Scan(&p.ID, &p.ActID, &p.ObjectID, &p.FileID, &p.FilePath, &p.Caption, &p.CreatedAt, &p.ActNo)
+	if err != nil {
+		return p, ErrNotFound
+	}
+	return p, nil
+}
+
+// DeletePhoto — убрать неудачный снимок из фотоотчёта (v0.3.8: навигация
+// «в обе стороны» — не только добавить, но и убрать). Файл с диска снимает бот.
+func (s *Store) DeletePhoto(ctx context.Context, chatID, id int64) (domain.PhotoRec, error) {
+	p, err := s.GetPhoto(ctx, chatID, id)
+	if err != nil {
+		return p, err
+	}
+	if _, err := s.pool.Exec(ctx, "DELETE FROM photos WHERE id=$1", p.ID); err != nil {
+		return p, err
+	}
+	return p, nil
 }
 
 // ListPhotos — фото объекта (actID > 0: только фото этого акта), новые сверху.

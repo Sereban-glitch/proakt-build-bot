@@ -132,9 +132,14 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 			return
 		}
 		b.reset(ctx, chatID)
-		b.textKB(ctx, chatID, b.welcome(), MainMenu())
+		// v0.3.8: сначала постоянное меню (крупные кнопки внизу), затем
+		// приветствие с inline-кнопкой «📖 Инструкция по шагам» — новичок
+		// в один тап получает весь маршрут: добавить, найти, удалить.
+		b.textKB(ctx, chatID, "Главное меню — кнопки внизу экрана 👇", MainMenu())
+		b.textKB(ctx, chatID, b.welcome(), InstrButton())
 		return
-	case text == "/help" || strings.Contains(text, "помощь"):
+	case text == "/help" || strings.Contains(text, "помощь") || text == BtnInstrMenu ||
+		strings.EqualFold(text, "инструкция"):
 		b.textKB(ctx, chatID, b.help(), MainMenu())
 		return
 	case text == "/cancel" || text == BtnCancel || isCancelText(text):
@@ -357,6 +362,47 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 			}
 		}
 
+	case data == "instr": // v0.3.8: инструкция по шагам — кнопка из приветствия
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Открываю")
+		b.textKB(ctx, chatID, b.instruction(), MainMenu())
+
+	case strings.HasPrefix(data, "phdel:"): // v0.3.8: удалить неудачное фото
+		b.confirmDeletePhoto(ctx, chatID, cq.ID, cbID(data, "phdel:"))
+
+	case strings.HasPrefix(data, "phdelyes:"):
+		b.deletePhotoDo(ctx, chatID, cq.ID, cbID(data, "phdelyes:"))
+
+	case data == "phdelno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.text(ctx, chatID, "Фото на месте 📷 Ещё: /objects")
+
+	case strings.HasPrefix(data, "plist:"): // v0.3.8: оплаты акта списком
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оплаты")
+		b.showPayments(ctx, chatID, cbID(data, "plist:"))
+
+	case strings.HasPrefix(data, "paydel:"): // v0.3.8: удалить ошибочную оплату
+		b.confirmDeletePayment(ctx, chatID, cq.ID, cbID(data, "paydel:"))
+
+	case strings.HasPrefix(data, "paydelyes:"):
+		b.deletePaymentDo(ctx, chatID, cq.ID, cbID(data, "paydelyes:"))
+
+	case data == "paydelno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.text(ctx, chatID, "Оплата на месте. Акты: /acts")
+
+	case data == "objpick": // v0.3.8: скрыть лишний объект
+		b.pickObjectToHide(ctx, chatID, cq.ID)
+
+	case strings.HasPrefix(data, "objdel:"):
+		b.confirmHideObject(ctx, chatID, cq.ID, cbID(data, "objdel:"))
+
+	case strings.HasPrefix(data, "objdelyes:"):
+		b.hideObjectDo(ctx, chatID, cq.ID, cbID(data, "objdelyes:"))
+
+	case data == "objdelno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.text(ctx, chatID, "Объект на месте 🏠 Список: /objects")
+
 	case data == "finyes": // v0.3.6: завершили акт с позициями без цены осознанно
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Завершаю")
 		state, data2, _ := b.st.State(ctx, chatID)
@@ -488,7 +534,7 @@ func (b *Bot) showDraft(ctx context.Context, chatID int64) {
 
 func (b *Bot) beginObject(ctx context.Context, chatID int64, data map[string]string) {
 	_ = b.st.SetState(ctx, chatID, stObjName, data)
-	b.textKB(ctx, chatID, "Как назовём объект?\nНапример: ЖК «Сонячний», кв. 45", CancelMenu())
+	b.textKB(ctx, chatID, "Как назовём объект?\nНапример: ЖК Сонячний, кв. 45", CancelMenu())
 }
 
 func (b *Bot) createObjectFromText(ctx context.Context, chatID int64, data map[string]string, text string) {
@@ -563,6 +609,7 @@ func (b *Bot) showObjects(ctx context.Context, chatID int64) {
 	}
 	sb.WriteString("\n(это предварительные итоги — акты появляются по ходу работ)")
 	rows = append(rows, []tg.KBButton{{Text: BtnNewObj, CallbackData: "objnew"}})
+	rows = append(rows, []tg.KBButton{{Text: "🗑 Убрать объект", CallbackData: "objpick"}}) // v0.3.8
 	b.textKB(ctx, chatID, sb.String(), tg.Inline(rows))
 }
 

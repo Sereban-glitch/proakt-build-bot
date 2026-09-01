@@ -56,6 +56,17 @@ type Payment struct {
 	At     time.Time
 }
 
+// PaymentRec — оплата с контекстом акта/объекта (для удаления ошибочной
+// оплаты: «🗑 10 000 грн от 05.08, акт №3 · ЖК Сонячний», v0.3.8).
+type PaymentRec struct {
+	ID      int64
+	ActID   int64
+	Amount  float64
+	At      time.Time
+	ActNo   int
+	ObjName string
+}
+
 // PhotoRec — фото скрытых работ (привязка к акту или объекту).
 type PhotoRec struct {
 	ID        int64

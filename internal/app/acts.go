@@ -12,7 +12,8 @@ import (
 	"proakt/internal/tg"
 )
 
-// showActs — список актов с кнопками удаления.
+// showActs — список актов с кнопками удаления и оплат (v0.3.8: «💰 оплаты» —
+// сколько и когда пришло, ошибочную оплату можно убрать прямо оттуда).
 func (b *Bot) showActs(ctx context.Context, chatID int64) {
 	acts, err := b.st.ListActs(ctx, chatID, 12)
 	if err != nil || len(acts) == 0 {
@@ -23,17 +24,27 @@ func (b *Bot) showActs(ctx context.Context, chatID int64) {
 	sb.WriteString("📋 Последние акты:\n\n")
 	rows := []tg.KBButton{}
 	photoRows := tg.KB{} // v0.3.7: фото акта можно показать одной кнопкой
+	payRows := tg.KB{}   // v0.3.8: оплаты акта списком
 	for _, a := range acts {
 		status := "✅ оплачен"
 		if a.Balance() > 0.009 {
 			status = "долг " + money(a.Balance())
 		}
 		line := fmt.Sprintf("• №%d (%s) — %s · %s", a.ActNo, a.ObjectName, money(a.Total), status)
+		if a.Paid > 0.009 && a.Balance() > 0.009 {
+			line += fmt.Sprintf(" · оплачено %s", money(a.Paid))
+		}
 		if a.Photos > 0 {
 			line += fmt.Sprintf(" · 📷 %d", a.Photos)
 			photoRows = append(photoRows, []tg.KBButton{{
 				Text:         fmt.Sprintf("📷 фото акта №%d", a.ActNo),
 				CallbackData: fmt.Sprintf("pav:%d", a.ID),
+			}})
+		}
+		if a.Paid > 0.009 { // v0.3.8: оплаченное — видно и редактируется
+			payRows = append(payRows, []tg.KBButton{{
+				Text:         fmt.Sprintf("💰 оплаты №%d", a.ActNo),
+				CallbackData: fmt.Sprintf("plist:%d", a.ID),
 			}})
 		}
 		sb.WriteString(line + "\n")
@@ -44,7 +55,8 @@ func (b *Bot) showActs(ctx context.Context, chatID int64) {
 	}
 	kb := tg.KB{rows}
 	kb = append(photoRows, kb...)
-	sb.WriteString("\n🗑 — удалить ошибочный акт (спрошу подтверждение).")
+	kb = append(payRows, kb...)
+	sb.WriteString("\n💰 — оплаты акта · 📷 — фото · 🗑 — удалить ошибочный акт (с подтверждением)")
 	b.textKB(ctx, chatID, sb.String(), tg.Inline(kb))
 }
 

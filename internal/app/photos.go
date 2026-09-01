@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -165,7 +166,11 @@ func (b *Bot) showPhotos(ctx context.Context, chatID int64, objectID, actID int6
 	for i := len(phs) - 1; i >= 0; i-- { // старые → новые, как хронология стройки
 		p := phs[i]
 		cap := photoCaption(p, len(phs)-i, len(phs))
-		if err := b.tg.SendPhoto(ctx, chatID, p.FileID, cap); err != nil {
+		// v0.3.8: под каждым снимком кнопка 🗑 — неудачное фото можно убрать
+		kb := tg.Inline(tg.KB{
+			{tg.KBButton{Text: "🗑 Удалить это фото", CallbackData: fmt.Sprintf("phdel:%d", p.ID)}},
+		})
+		if err := b.tg.SendPhoto(ctx, chatID, p.FileID, cap, kb); err != nil {
 			log.Printf("sendPhoto чат %d фото %d: %v", chatID, p.ID, err)
 			continue
 		}
@@ -175,7 +180,7 @@ func (b *Bot) showPhotos(ctx context.Context, chatID int64, objectID, actID int6
 		b.textKB(ctx, chatID, fmt.Sprintf("Показал %d из %d — остальные, увы, устарели в Telegram 😕", sent, len(phs)), MainMenu())
 		return
 	}
-	b.textKB(ctx, chatID, "Вот всё, что сохранил 📷 Фото — всегда под рукой: /objects", MainMenu())
+	b.textKB(ctx, chatID, "Вот всё, что сохранил 📷 Неудачный снимок — кнопка 🗑 под ним. Ещё: /objects", MainMenu())
 }
 
 // photoCaption — подпись к фото при показе: №, дата, акт, комментарий мастера.
@@ -196,4 +201,52 @@ func whereLabel(actID *int64) string {
 		return " (привязано к акту)"
 	}
 	return " (к объекту)"
+}
+
+// --- удаление неудачного фото (v0.3.8) ---------------------------------------
+// «Если неудачное фото загружено — должна быть возможность его удалить»
+// (запрос владельца). Кнопка 🗑 висит под каждым показанным снимком.
+
+// confirmDeletePhoto — «🗑 под фото»: показать, что уйдёт, и спросить.
+func (b *Bot) confirmDeletePhoto(ctx context.Context, chatID int64, cqID string, photoID int64) {
+	p, err := b.st.GetPhoto(ctx, chatID, photoID)
+	if err != nil {
+		_ = b.tg.AnswerCallbackQuery(ctx, cqID, "Фото не найдено")
+		b.text(ctx, chatID, "Фото уже удалено 😕 Ещё фото: /objects")
+		return
+	}
+	_ = b.tg.AnswerCallbackQuery(ctx, cqID, "")
+	b.textKB(ctx, chatID, photoDelText(p), tg.Inline(tg.KB{
+		{tg.KBButton{Text: "🗑 Удалить", CallbackData: fmt.Sprintf("phdelyes:%d", p.ID)}},
+		{tg.KBButton{Text: "❌ Оставить", CallbackData: "phdelno"}},
+	}))
+}
+
+// photoDelText — подтверждение удаления фото (вынесено для тестов).
+func photoDelText(p domain.PhotoRec) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "🗑 Удалить фото от %s", p.CreatedAt.Format("02.01 15:04"))
+	if p.ActNo > 0 {
+		fmt.Fprintf(&sb, " (акт №%d)", p.ActNo)
+	}
+	if c := strings.TrimSpace(p.Caption); c != "" {
+		fmt.Fprintf(&sb, "\n📝 %s", c)
+	}
+	sb.WriteString("?\n\nСнимок пропадёт из фотоотчёта. Вернуть будет нельзя —\nно можно просто прислать заново: 📷 Фото")
+	return sb.String()
+}
+
+// deletePhotoDo — само удаление: строка в БД + файл на диске.
+func (b *Bot) deletePhotoDo(ctx context.Context, chatID int64, cqID string, photoID int64) {
+	p, err := b.st.DeletePhoto(ctx, chatID, photoID)
+	if err != nil {
+		_ = b.tg.AnswerCallbackQuery(ctx, cqID, "Не получилось")
+		b.textKB(ctx, chatID, "Не получилось удалить фото 😕 Попробуй ещё раз: /objects", MainMenu())
+		return
+	}
+	_ = b.tg.AnswerCallbackQuery(ctx, cqID, "Удалил")
+	if p.FilePath != "" {
+		_ = os.Remove(p.FilePath) // файл мог уже уйти — не страшно
+	}
+	b.textKB(ctx, chatID, "🗑 Фото удалено. Остальные фото: 🏠 Объекты → 📷", MainMenu())
 }

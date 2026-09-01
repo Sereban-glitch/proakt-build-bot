@@ -132,13 +132,17 @@ func (c *Client) GetMe(ctx context.Context) (*User, error) {
 
 // SendPhoto — отправить фото по file_id (фото уже хранится в Telegram, v0.3.7:
 // демонстрация скрытых работ заказчику без повторной загрузки).
-func (c *Client) SendPhoto(ctx context.Context, chatID int64, fileID, caption string) error {
+// v0.3.8: markup — inline-клавиатура (кнопка «🗑 Удалить это фото» под снимком).
+func (c *Client) SendPhoto(ctx context.Context, chatID int64, fileID, caption string, markup any) error {
 	payload := map[string]any{
 		"chat_id": chatID,
 		"photo":   fileID,
 	}
 	if caption != "" {
 		payload["caption"] = caption
+	}
+	if markup != nil {
+		payload["reply_markup"] = markup
 	}
 	return c.call(ctx, c.http, "sendPhoto", payload, nil)
 }

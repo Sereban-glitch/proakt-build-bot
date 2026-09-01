@@ -34,7 +34,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := c.SendPhoto(ctx, *chat, *fileID, *caption); err != nil {
+	if err := c.SendPhoto(ctx, *chat, *fileID, *caption, nil); err != nil {
 		log.Fatalf("ОШИБКА sendPhoto: %v", err)
 	}
 	log.Printf("OK: фото отправлено по file_id (chat %d)", *chat)
