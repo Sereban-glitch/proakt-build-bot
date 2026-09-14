@@ -222,6 +222,12 @@ func (s *Server) handleActGet(w http.ResponseWriter, r *http.Request) {
 	if lines == nil {
 		lines = []domain.ActLine{}
 	}
+	if payments == nil {
+		payments = []domain.Payment{}
+	}
+	if photos == nil {
+		photos = []domain.PhotoRec{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"act":      brief,
 		"lines":    lines,

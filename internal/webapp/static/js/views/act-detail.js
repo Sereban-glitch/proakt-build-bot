@@ -105,7 +105,7 @@ export function view({ root, params, navigate }) {
     payCard.appendChild(payTitle);
     const payList = document.createElement('div');
     payList.className = 'list';
-    if (!d.payments.length) {
+    if (!d.payments?.length) {
       const none = document.createElement('div');
       none.className = 'hint-text';
       none.textContent = 'Оплат ещё не было — добавь первую кнопку ниже';
