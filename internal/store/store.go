@@ -83,6 +83,41 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   price    NUMERIC(12,2) NOT NULL,
   UNIQUE(chat_id, name)
 );
+CREATE TABLE IF NOT EXISTS estimates (
+  id          BIGSERIAL PRIMARY KEY,
+  object_id   BIGINT NOT NULL REFERENCES objects(id) ON DELETE CASCADE,
+  chat_id     BIGINT NOT NULL,
+  title       TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'draft',
+  coeff       NUMERIC(4,2) NOT NULL DEFAULT 1.00,
+  note        TEXT NOT NULL DEFAULT '',
+  share_token TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_estimates_chat ON estimates(chat_id);
+CREATE INDEX IF NOT EXISTS idx_estimates_obj ON estimates(object_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_estimates_share ON estimates(share_token) WHERE share_token <> '';
+CREATE TABLE IF NOT EXISTS estimate_lines (
+  id     BIGSERIAL PRIMARY KEY,
+  est_id BIGINT NOT NULL REFERENCES estimates(id) ON DELETE CASCADE,
+  pos    INT NOT NULL,
+  name   TEXT NOT NULL,
+  qty    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  unit   TEXT NOT NULL DEFAULT '',
+  price  NUMERIC(12,2) NOT NULL DEFAULT 0,
+  sum    NUMERIC(14,2) NOT NULL DEFAULT 0,
+  hidden BOOLEAN NOT NULL DEFAULT FALSE,
+  done   BOOLEAN NOT NULL DEFAULT FALSE,
+  note   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_est_lines_est ON estimate_lines(est_id);
+CREATE TABLE IF NOT EXISTS templates (
+  id      BIGSERIAL PRIMARY KEY,
+  chat_id BIGINT NOT NULL,
+  name    TEXT NOT NULL,
+  lines   JSONB NOT NULL DEFAULT '[]'::jsonb,
+  UNIQUE(chat_id, name)
+);
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version    INT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -260,7 +295,7 @@ func (s *Store) CreateAct(ctx context.Context, objectID int64, lines []domain.Dr
 }
 
 const actBriefSQL = `
-SELECT a.id, a.act_no, a.object_id, o.name, o.customer,
+SELECT a.id, a.act_no, a.object_id, o.name, o.customer, a.date,
   COALESCE((SELECT SUM(l.sum)   FROM act_lines l WHERE l.act_id = a.id), 0) AS total,
   COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id = a.id), 0) AS paid,
   (SELECT count(*) FROM photos ph WHERE ph.act_id = a.id) AS photos
@@ -279,7 +314,7 @@ func (s *Store) ListActs(ctx context.Context, chatID int64, limit int) ([]domain
 	for rows.Next() {
 		var b domain.ActBrief
 		var total, paid float64
-		if err := rows.Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &total, &paid, &b.Photos); err != nil {
+		if err := rows.Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &b.Date, &total, &paid, &b.Photos); err != nil {
 			return nil, err
 		}
 		b.Total, b.Paid = total, paid
@@ -288,16 +323,30 @@ func (s *Store) ListActs(ctx context.Context, chatID int64, limit int) ([]domain
 	return out, rows.Err()
 }
 
+// ActChatID — чат-владелец акта одним запросом. Нужен Mini App API:
+// веб-запросы приходят «из интернета», поэтому перед удалением/оплатой
+// сервер обязан проверить, что акт принадлежит именно этому chat_id (v0.4).
+func (s *Store) ActChatID(ctx context.Context, actID int64) (int64, error) {
+	var chatID int64
+	err := s.pool.QueryRow(ctx,
+		"SELECT o.chat_id FROM acts a JOIN objects o ON o.id = a.object_id WHERE a.id = $1", actID).
+		Scan(&chatID)
+	if err != nil {
+		return 0, ErrNotFound
+	}
+	return chatID, nil
+}
+
 func (s *Store) GetAct(ctx context.Context, actID int64) (domain.ActBrief, error) {
 	var b domain.ActBrief
 	var total, paid float64
 	err := s.pool.QueryRow(ctx, `
-SELECT a.id, a.act_no, a.object_id, o.name, o.customer,
+SELECT a.id, a.act_no, a.object_id, o.name, o.customer, a.date,
   COALESCE((SELECT SUM(l.sum)   FROM act_lines l WHERE l.act_id = a.id), 0),
   COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.act_id = a.id), 0),
   (SELECT count(*) FROM photos ph WHERE ph.act_id = a.id)
 FROM acts a JOIN objects o ON o.id = a.object_id WHERE a.id = $1`, actID).
-		Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &total, &paid, &b.Photos)
+		Scan(&b.ID, &b.ActNo, &b.ObjectID, &b.ObjectName, &b.Customer, &b.Date, &total, &paid, &b.Photos)
 	if err != nil {
 		return b, ErrNotFound
 	}
@@ -561,13 +610,13 @@ func (s *Store) ClearCatalog(ctx context.Context, chatID int64) error {
 }
 
 type Stats struct {
-	Objects    int
-	Acts       int
-	Total      float64
-	Paid       float64
-	Photos     int
-	ZeroActs   int // акты с суммой 0: работы есть — денег нет (упущенная выгода, v0.3.7)
-	UnpaidActs int // акты с долгом: выполнено, но не оплачено (v0.3.7)
+	Objects    int     `json:"objects"`
+	Acts       int     `json:"acts"`
+	Total      float64 `json:"total"`
+	Paid       float64 `json:"paid"`
+	Photos     int     `json:"photos"`
+	ZeroActs   int     `json:"zero_acts"`   // акты с суммой 0: работы есть — денег нет (v0.3.7)
+	UnpaidActs int     `json:"unpaid_acts"` // акты с долгом: выполнено, но не оплачено (v0.3.7)
 }
 
 func (s *Store) Stats(ctx context.Context, chatID int64) (Stats, error) {

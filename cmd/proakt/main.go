@@ -18,12 +18,13 @@ import (
 	"proakt/internal/ai"
 	"proakt/internal/app"
 	"proakt/internal/config"
+	"proakt/internal/httpapi"
 	"proakt/internal/store"
 	"proakt/internal/tg"
 )
 
 // version — подставляется при релизной сборке:
-// go build -ldflags "-s -w -X main.version=v0.3.0"
+// go build -ldflags "-s -w -X main.version=v0.4.0"
 var version = "dev"
 
 func main() {
@@ -86,6 +87,32 @@ func main() {
 			cfg.AIGateway, cfg.AIModel, cfg.AIModelASR)
 	} else {
 		log.Printf("ai: AI_GATEWAY_URL не задан — голос выключен, ввод текстом")
+	}
+
+	// Mini App (v0.4): если задан WEBAPP_LISTEN — поднимаем HTTP-сервер
+	// с API и встроенным веб-приложением. Не задан — всё как раньше (0 портов).
+	if cfg.WebappListen != "" {
+		wsrv := httpapi.New(httpapi.Config{
+			Listen:    cfg.WebappListen,
+			BotToken:  cfg.BotToken,
+			AuthTTL:   cfg.WebappAuthTTL,
+			FilesDir:  cfg.FilesDir,
+			PublicURL: cfg.WebappURL, // share-ссылки смет строятся от него
+		}, st)
+		go func() {
+			if err := wsrv.Run(ctx); err != nil {
+				log.Printf("webapp: %v", err)
+			}
+		}()
+		if cfg.WebappURL != "" {
+			if err := client.SetChatMenuButton(ctx, "🧰 ПрорАКТ", cfg.WebappURL); err != nil {
+				log.Printf("setChatMenuButton: %v", err)
+			} else {
+				log.Printf("webapp: кнопка меню установлена — %s", cfg.WebappURL)
+			}
+		} else {
+			log.Printf("webapp: WEBAPP_URL не задан — кнопка в меню бота не обновлена")
+		}
 	}
 
 	offset := int64(0)

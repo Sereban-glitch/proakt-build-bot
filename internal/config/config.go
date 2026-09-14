@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"os"
+	"time"
 )
 
 type Config struct {
@@ -15,6 +16,11 @@ type Config struct {
 	AIModel    string // модель шлюза для текста (gemini-3-flash)
 	AIModelASR string // модель шлюза для распознавания голоса (gemini-2.5-flash)
 	AIKey      string // опциональный Bearer-ключ шлюза
+
+	// Mini App (v0.4): пустой Listen — веб-часть выключена (0 портов, как раньше).
+	WebappListen  string        // адрес HTTP-сервера Mini App, например ":8443"
+	WebappURL     string        // публичный https-адрес Mini App (кнопка в меню бота)
+	WebappAuthTTL time.Duration // максимум возраста initData (0 — 24 часа)
 }
 
 func getenv(key, def string) string {
@@ -35,6 +41,10 @@ func Load() (*Config, error) {
 		AIModel:    getenv("AI_MODEL", "gemini-3-flash"),
 		AIModelASR: getenv("AI_MODEL_ASR", "gemini-2.5-flash"),
 		AIKey:      os.Getenv("AI_GATEWAY_KEY"),
+
+		WebappListen:  os.Getenv("WEBAPP_LISTEN"),
+		WebappURL:     os.Getenv("WEBAPP_URL"),
+		WebappAuthTTL: 24 * time.Hour,
 	}
 	if cfg.BotToken == "" {
 		return nil, errors.New("BOT_TOKEN не задан")

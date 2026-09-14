@@ -74,6 +74,22 @@ func (c *Client) call(ctx context.Context, client *http.Client, method string, p
 	return nil
 }
 
+// SetChatMenuButton — кнопка «🧰 ПрорАКТ» слева от поля ввода (v0.4):
+// открывает Mini App. url пустой — вернуть обычное меню команд.
+func (c *Client) SetChatMenuButton(ctx context.Context, text, url string) error {
+	payload := map[string]any{}
+	if url != "" {
+		payload["menu_button"] = map[string]any{
+			"type":    "web_app",
+			"text":    text,
+			"web_app": map[string]string{"url": url},
+		}
+	} else {
+		payload["menu_button"] = map[string]any{"type": "commands"}
+	}
+	return c.call(ctx, c.http, "setChatMenuButton", payload, nil)
+}
+
 // GetUpdates — длинный опрос обновлений.
 func (c *Client) GetUpdates(ctx context.Context, offset int64, timeoutSec int) ([]Update, error) {
 	payload := map[string]any{

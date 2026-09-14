@@ -1,0 +1,84 @@
+/* ПрорАКТ · база: reset, типографика, safe-area, скролл */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* фон с мягким свечением — глубина для glassmorphism */
+.app {
+  min-height: 100%;
+  background:
+    radial-gradient(520px 340px at 8% -8%, var(--bg-glow-1), transparent 60%),
+    radial-gradient(640px 420px at 108% 14%, var(--bg-glow-2), transparent 62%),
+    var(--bg);
+  display: flex;
+  flex-direction: column;
+  /* safe-area + запас под панель Telegram */
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-gap, 0px));
+}
+
+main.view {
+  flex: 1 0 auto;
+  padding: var(--page-top) var(--page-x) 96px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+h1, h2, h3 { margin: 0; letter-spacing: -.015em; }
+p { margin: 0; }
+
+a { color: var(--accent); text-decoration: none; }
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+
+::placeholder { color: var(--hint); opacity: 1; }
+
+/* деньги и счётчики — выровненные цифры */
+.num { font-variant-numeric: tabular-nums; }
+
+.muted { color: var(--text-secondary); }
+.hint-text { color: var(--hint); font-size: 13.5px; }
+
+.row { display: flex; align-items: center; gap: var(--gap-m); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-m); }
+.col { display: flex; flex-direction: column; gap: var(--gap-s); }
+.grow { flex: 1 1 auto; min-width: 0; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* скроллбар — тонкий и ненавязчивый */
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+/* доступность: фокус виден, но не мигает на тапах */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

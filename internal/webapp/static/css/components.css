@@ -1,0 +1,703 @@
+/* ============================================================
+   ПрорАКТ · UI-кит (glassmorphism, 2026)
+   Компоненты соответствуют js/components/ui/*.js
+   ============================================================ */
+
+/* --- сплэш ---------------------------------------------------- */
+.boot-splash {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+}
+.boot-logo { font-size: 52px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.4)); animation: boot-pop .6s var(--spring) both; }
+.boot-title { font-size: 22px; font-weight: 800; letter-spacing: .02em; }
+.boot-hint { color: var(--hint); font-size: 14px; }
+@keyframes boot-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* --- шапка ---------------------------------------------------- */
+.app-header {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--tg-gap, 0px));
+  z-index: 30;
+  padding: 10px var(--page-x) 10px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  border-bottom: 1px solid var(--border);
+}
+.app-header .title { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.app-header .subtitle { font-size: 12.5px; color: var(--hint); margin-top: 1px; }
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 40px; height: 40px;
+  border-radius: 13px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  color: var(--text-secondary);
+  transition: transform .15s var(--tap-ease), background .2s;
+}
+.icon-btn:active { transform: scale(.92); background: var(--card-strong); }
+
+/* --- стеклянная карточка -------------------------------------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  box-shadow: var(--shadow-1);
+  padding: var(--gap-l);
+}
+.card.clickable { transition: transform .16s var(--tap-ease), border-color .2s; }
+.card.clickable:active { transform: scale(.975); border-color: var(--border-strong); }
+.card.section { margin-top: var(--gap-l); }
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--hint);
+  margin-bottom: var(--gap-m);
+}
+
+/* --- метрики (дашборд) ---------------------------------------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-m);
+}
+.stat-grid.wide-first > :first-child { grid-column: 1 / -1; }
+
+.stat {
+  position: relative;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  padding: 14px 16px;
+}
+.stat .stat-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: .03em;
+  color: var(--text-secondary);
+}
+.stat .stat-value {
+  margin-top: 4px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat .stat-value .unit { font-size: 14px; font-weight: 700; color: var(--hint); margin-left: 4px; }
+.stat .stat-sub { margin-top: 2px; font-size: 12.5px; color: var(--hint); font-variant-numeric: tabular-nums; }
+.stat.hero { background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--card); }
+.stat.hero .stat-value { font-size: 34px; }
+.stat .stat-icon { position: absolute; right: 12px; top: 12px; opacity: .5; color: var(--text-secondary); }
+
+/* --- кнопки ---------------------------------------------------- */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: var(--radius-m);
+  font-weight: 700;
+  font-size: 15.5px;
+  letter-spacing: -.01em;
+  border: 1px solid transparent;
+  transition: transform .16s var(--tap-ease), filter .2s, background .2s, opacity .2s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn:active { transform: scale(.965); }
+
+.btn-primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white 12%), var(--accent));
+  color: var(--on-accent);
+  box-shadow: var(--shadow-accent);
+}
+.btn-primary:active { filter: brightness(1.06); }
+
+.btn-secondary {
+  background: var(--card-strong);
+  border-color: var(--border);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 32%, transparent);
+}
+
+.btn-ghost { background: transparent; color: var(--accent); }
+
+.btn-block { display: flex; width: 100%; }
+.btn-sm { min-height: 38px; padding: 8px 14px; font-size: 14px; border-radius: 12px; }
+
+.btn[disabled], .btn.loading {
+  opacity: .55;
+  pointer-events: none;
+}
+.btn.loading { color: transparent !important; }
+.btn.loading::after {
+  content: "";
+  position: absolute;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  color: var(--text);
+  animation: spin .7s linear infinite;
+}
+.btn-primary.loading::after { color: var(--on-accent); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- бейджи ---------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  background: var(--card-strong);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.badge.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.badge.info { background: var(--info-soft); color: var(--info); border-color: transparent; }
+
+/* --- список (ячейки) ------------------------------------------- */
+.list { display: flex; flex-direction: column; }
+.cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--border);
+  transition: opacity .15s, transform .15s var(--tap-ease);
+  color: inherit;
+}
+.cell:last-child { border-bottom: 0; }
+.cell:active { transform: scale(.985); opacity: .85; }
+.cell .cell-ic {
+  flex: 0 0 auto;
+  width: 42px; height: 42px;
+  display: grid; place-items: center;
+  border-radius: 13px;
+  background: var(--card-strong);
+  border: 1px solid var(--border);
+  color: var(--accent);
+}
+.cell .cell-title { font-weight: 650; font-size: 15.5px; }
+.cell .cell-sub { font-size: 13px; color: var(--hint); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.cell .cell-right { text-align: right; flex: 0 0 auto; }
+.cell .cell-value { font-weight: 750; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.cell .cell-note { font-size: 12.5px; color: var(--hint); margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+/* --- поиск ------------------------------------------------------ */
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--card);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  color: var(--hint);
+}
+.searchbar input {
+  flex: 1;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-size: 15.5px;
+  min-width: 0;
+}
+
+/* --- поля ввода (нижний лист) ----------------------------------- */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--gap-l); }
+.field label { font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+.field input, .field textarea {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: var(--radius-m);
+  background: var(--card-strong);
+  border: 1px solid var(--border);
+  outline: none;
+  font-size: 16px;
+  transition: border-color .2s;
+}
+.field input:focus, .field textarea:focus { border-color: var(--accent); }
+.field .field-error { color: var(--danger); font-size: 12.5px; }
+
+/* --- нижний лист ------------------------------------------------ */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity .25s ease;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet-backdrop.open { opacity: 1; }
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88dvh;
+  overflow: auto;
+  background: color-mix(in srgb, var(--bg) 88%, white 12%);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 8px var(--page-x) calc(var(--gap-xl) + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform .32s var(--spring);
+}
+.sheet-backdrop.open .sheet { transform: translateY(0); }
+.sheet-grabber { width: 44px; height: 5px; border-radius: 3px; background: var(--border-strong); margin: 6px auto 14px; }
+.sheet h3 { font-size: 19px; font-weight: 800; margin-bottom: 14px; }
+
+/* --- тосты ------------------------------------------------------- */
+.toasts {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(92vw, 480px);
+  padding: 11px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 650;
+  background: color-mix(in srgb, var(--bg) 76%, white 24%);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-1);
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  animation: toast-in .3s var(--spring) both;
+}
+.toast.ok { color: var(--ok); }
+.toast.danger { color: var(--danger); }
+.toast.leaving { animation: toast-out .25s ease both; }
+@keyframes toast-in { from { transform: translateY(16px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toast-out { to { transform: translateY(10px) scale(.94); opacity: 0; } }
+
+/* --- скелетоны ---------------------------------------------------- */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--card-strong);
+  border-radius: var(--radius-m);
+  min-height: 14px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.skeleton.card-sk { height: 86px; border-radius: var(--radius-l); }
+.skeleton.cell-sk { height: 58px; border-radius: var(--radius-m); margin-bottom: 10px; }
+
+/* --- пустое состояние --------------------------------------------- */
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 44px 20px;
+  color: var(--hint);
+}
+.empty .empty-ic {
+  width: 64px; height: 64px;
+  display: grid; place-items: center;
+  border-radius: 22px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.empty .empty-title { font-weight: 750; color: var(--text-secondary); font-size: 16px; }
+.empty .empty-sub { font-size: 13.5px; max-width: 260px; }
+
+/* --- таб-бар -------------------------------------------------------- */
+.tabbar {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: 10px max(var(--page-x), env(safe-area-inset-left, 0px)) calc(10px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 92%, transparent), transparent);
+  pointer-events: none;
+}
+.tabbar .tabbar-inner {
+  pointer-events: auto;
+  display: flex;
+  gap: 2px;
+  background: color-mix(in srgb, var(--bg) 55%, white 12%);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 6px;
+  -webkit-backdrop-filter: var(--blur-hairline);
+  backdrop-filter: var(--blur-hairline);
+  box-shadow: var(--shadow-1);
+}
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 62px;
+  padding: 7px 10px 6px;
+  border-radius: 16px;
+  color: var(--hint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  transition: background .2s, color .2s, transform .15s var(--tap-ease);
+}
+.tab:active { transform: scale(.92); }
+.tab.active {
+  color: var(--on-accent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white 12%), var(--accent));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* --- прочее ---------------------------------------------------------- */
+.demo-chip {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + var(--tg-gap, 0px) + 10px);
+  right: 12px;
+  z-index: 60;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.divider { height: 1px; background: var(--border); margin: var(--gap-m) 0; border: 0; }
+
+.banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 13px 15px;
+  border-radius: var(--radius-l);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  background: var(--warn-soft);
+  color: var(--text);
+  font-size: 13.5px;
+}
+.banner.danger { border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: var(--danger-soft); }
+.banner .banner-ic { color: var(--warn); flex: 0 0 auto; margin-top: 1px; }
+.banner.danger .banner-ic { color: var(--danger); }
+
+/* таблица позиций акта */
+.lines { width: 100%; border-collapse: collapse; font-size: 14px; }
+.lines th {
+  text-align: left;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--hint);
+  font-weight: 700;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.lines td { padding: 9px 4px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.lines tr:last-child td { border-bottom: 0; }
+.lines .t-right { text-align: right; }
+.lines .t-sum { font-weight: 750; }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.photo-grid .ph {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card-strong);
+  display: grid;
+  place-items: center;
+  color: var(--hint);
+  font-size: 11px;
+  text-align: center;
+  padding: 4px;
+}
+.photo-grid .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* ============================================================
+   v0.5 · сметы: сегменты, кольцо, чипы, степпер, карточки позиций
+   ============================================================ */
+
+/* --- Segmented ------------------------------------------------------------ */
+.seg {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 3px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  backdrop-filter: var(--blur-hairline);
+  overflow: hidden;
+}
+.seg-btn {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: 600 13px/1 var(--font);
+  padding: 9px 4px;
+  border-radius: calc(var(--radius-m) - 4px);
+  transition: color .18s var(--tap-ease), transform .1s var(--tap-ease);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-btn:active { transform: scale(.96); }
+.seg-btn.active { color: var(--on-accent); }
+.seg-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 0;
+  border-radius: calc(var(--radius-m) - 4px);
+  background: var(--accent);
+  box-shadow: var(--shadow-accent);
+  transition: transform .24s var(--spring), width .24s var(--spring);
+}
+.seg-sm .seg-btn { padding: 7px 4px; font-size: 12px; }
+
+/* --- Ring ----------------------------------------------------------------- */
+.ring { position: relative; display: grid; place-items: center; flex: 0 0 auto; }
+.ring svg { display: block; }
+.ring-val { transition: stroke-dashoffset .9s var(--spring); }
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 1px;
+}
+.ring-label { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
+.ring-sub { font-size: 10px; color: var(--hint); text-transform: uppercase; letter-spacing: .07em; }
+
+/* --- ProgressBar ------------------------------------------------------------ */
+.progress { height: 7px; border-radius: 99px; background: var(--card-strong); overflow: hidden; border: 1px solid var(--border); }
+.progress-fill { height: 100%; width: 0; border-radius: 99px; transition: width .8s var(--spring); }
+
+/* --- Chip --------------------------------------------------------------------- */
+.chip {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-secondary);
+  font: 600 12.5px/1 var(--font);
+  padding: 8px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .18s var(--tap-ease);
+  backdrop-filter: var(--blur-hairline);
+}
+.chip:active { transform: scale(.95); }
+.chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chip.active.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+
+/* --- Stepper -------------------------------------------------------------------- */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--card-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 3px;
+}
+.stepper-btn {
+  border: 0;
+  background: none;
+  color: var(--text);
+  width: 34px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: calc(var(--radius-m) - 4px);
+  cursor: pointer;
+}
+.stepper-btn:active { background: var(--accent-soft); color: var(--accent); }
+.stepper-val {
+  width: 86px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: 700 14.5px var(--font);
+  text-align: center;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- карточка сметы в списке -------------------------------------------------------- */
+.est-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.est-card .est-top { display: flex; align-items: center; gap: 10px; }
+.est-card .est-ic {
+  width: 38px; height: 38px; flex: 0 0 auto;
+  display: grid; place-items: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.est-card .est-name { font-weight: 700; font-size: 15px; }
+.est-card .est-obj { font-size: 12px; color: var(--hint); }
+.est-card .est-money { display: flex; align-items: baseline; gap: 8px; }
+.est-card .est-total { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.est-card .est-parts { font-size: 12px; color: var(--hint); }
+.est-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* статус-бейджи сметы */
+.est-status { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 99px; letter-spacing: .02em; }
+.est-status.draft   { background: var(--card-strong); color: var(--text-secondary); border: 1px solid var(--border); }
+.est-status.sent    { background: var(--warn-soft); color: var(--warn); }
+.est-status.approved{ background: var(--ok-soft); color: var(--ok); }
+.est-status.done    { background: var(--info-soft); color: var(--info); }
+
+/* --- строка позиции сметы (конструктор) --------------------------------------------- */
+.est-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+  transition: background .2s;
+}
+.est-line:last-child { border-bottom: 0; }
+.est-line.hiddenw { background: var(--warn-soft); border-radius: 0; }
+.est-line.hiddenw:first-child { border-radius: var(--radius-m) var(--radius-m) 0 0; }
+.est-line .ln-name { font-size: 14.2px; font-weight: 600; line-height: 1.35; }
+.est-line.hiddenw .ln-name::before { content: '▪ '; color: var(--warn); }
+.est-line.done .ln-name { color: var(--hint); text-decoration: line-through solid color-mix(in srgb, var(--hint) 55%, transparent); }
+.est-line .ln-sum { font-size: 14.5px; font-weight: 750; font-variant-numeric: tabular-nums; text-align: right; }
+.est-line .ln-meta { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; color: var(--hint); }
+.est-line .ln-actions { display: flex; gap: 2px; margin-left: auto; }
+.icon-mini {
+  border: 0; background: none; color: var(--hint);
+  width: 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; cursor: pointer;
+  transition: all .15s;
+}
+.icon-mini:active { background: var(--card-strong); color: var(--text); transform: scale(.92); }
+.icon-mini.danger:active { background: var(--danger-soft); color: var(--danger); }
+.icon-mini.done-on { color: var(--ok); }
+
+/* вспышка при пересчёте (коэффициент/правка) */
+.flash { animation: flashbg .7s var(--tap-ease); }
+@keyframes flashbg {
+  0% { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+  100% { background: transparent; }
+}
+
+/* --- строка ввода-парсера ------------------------------------------------------------ */
+.parse-box { border: 1px solid var(--border); border-radius: var(--radius-m); overflow: hidden; }
+.parse-preview { padding: 10px 13px; background: var(--accent-soft); font-size: 13px; color: var(--text); }
+.parse-preview b { color: var(--accent); }
+
+/* --- FAB (плавающая кнопка) ----------------------------------------------------------- */
+.fab-wrap { position: sticky; bottom: 86px; display: flex; justify-content: flex-end; padding: 4px 0 10px; z-index: 5; }
+.fab {
+  border: 0;
+  width: 52px; height: 52px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #58b0e3));
+  color: var(--on-accent);
+  display: grid; place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-accent);
+  transition: transform .16s var(--spring);
+}
+.fab:active { transform: scale(.92) rotate(90deg); }
+
+/* --- итоговая шапка сметы --------------------------------------------------------------- */
+.est-hero {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px;
+  background:
+    radial-gradient(320px 130px at 90% -40%, var(--bg-glow-2), transparent),
+    var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  backdrop-filter: var(--blur-hairline);
+}
+.est-hero .est-hv { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.est-hero .est-hv .big { font-size: 21px; font-weight: 800; letter-spacing: -.02em; }
+.est-hero .est-hv .sub { font-size: 12px; color: var(--hint); }
+.split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* коэффициент-строка */
+.coeff-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.coeff-row .coeff-ic { color: var(--warn); flex: 0 0 auto; }
+.coeff-row .coeff-note { font-size: 11.5px; color: var(--hint); line-height: 1.45; }
