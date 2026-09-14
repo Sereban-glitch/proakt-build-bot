@@ -35,6 +35,13 @@ const (
 	stPriceDel     = "price_del"    // ждём название позиции для удаления (v0.3.5)
 	stPriceDelConf = "price_del_ok" // подтверждение удаления одной позиции (v0.3.5)
 	stActDelConf   = "act_del_ok"   // подтверждение удаления акта (v0.3.6)
+	// v0.6 — сметы в чате (/smeta) и синк прайса с Google Таблицей
+	stEstTitle    = "est_title"     // ждём название новой сметы
+	stEstLines    = "est_lines"     // ввод строк сметы (сразу в БД)
+	stEstPick     = "est_pick"      // отметка строк для «акта из сметы»
+	stEstRoomWait = "est_room_wait" // размеры помещения (площадь, высота [, периметр])
+	stEstDelConf  = "est_del_ok"    // подтверждение удаления сметы
+	stPriceSheet  = "price_sheet"   // ждём ссылку Google Таблицы для синка прайса
 )
 
 type Bot struct {
@@ -155,6 +162,15 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		}
 		b.startNewAct(ctx, chatID)
 		return
+	case text == "/smeta" || text == BtnSmeta || text == "/estimates":
+		b.showEstimates(ctx, chatID)
+		return
+	case text == "/backup":
+		b.sendBackup(ctx, chatID)
+		return
+	case text == "/sync":
+		b.syncPriceNow(ctx, chatID)
+		return
 	case text == "/draft":
 		b.showDraft(ctx, chatID)
 		return
@@ -225,6 +241,18 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️ (или ⏹ Отмена)")
 	case stActDelConf:
 		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️ (или ⏹ Отмена)")
+	case stEstTitle:
+		b.estTitleFromText(ctx, chatID, data, text)
+	case stEstLines:
+		b.estLineFromText(ctx, chatID, data, text)
+	case stEstPick:
+		b.estActPick(ctx, chatID, data, text)
+	case stEstRoomWait:
+		b.estRoomFromText(ctx, chatID, data, text)
+	case stEstDelConf:
+		b.text(ctx, chatID, "Жду подтверждения кнопкой выше ⬆️ (или ⏹ Отмена)")
+	case stPriceSheet:
+		b.priceSheetFromText(ctx, chatID, text)
 	default:
 		b.textKB(ctx, chatID, notUnderstood, MainMenu())
 	}
@@ -269,6 +297,14 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 	case data == "vox":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Отбросил")
 		b.discardVoiceLines(ctx, chatID, stateData)
+
+	case data == "evok": // v0.6: голос → в смету
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Добавляю в смету")
+		b.applyVoiceEstLines(ctx, chatID, stateData)
+
+	case data == "evox":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Отбросил")
+		b.discardVoiceEstLines(ctx, chatID, stateData)
 
 	case data == "plist":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Список")
@@ -420,6 +456,110 @@ func (b *Bot) onCallback(ctx context.Context, cq tg.CallbackQuery) {
 	case data == "finno":
 		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Продолжаем")
 		b.textKB(ctx, chatID, "Продолжай ввод 👀 Черновик покажет всё, ↩️ уберёт последнюю.", ActMenu())
+
+	// --- v0.6: сметы в чате -------------------------------------------------
+	case data == "estnew":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Новая смета")
+		b.estNewStart(ctx, chatID)
+
+	case strings.HasPrefix(data, "estobj:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Название?")
+		objID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estobj:"), 10, 64)
+		if objID > 0 {
+			b.estObjPicked(ctx, chatID, objID)
+		}
+
+	case strings.HasPrefix(data, "estopen:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Открываю")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estopen:"), 10, 64)
+		if estID > 0 {
+			b.estOpen(ctx, chatID, estID)
+		}
+
+	case strings.HasPrefix(data, "estundo:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Убираю")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estundo:"), 10, 64)
+		if estID > 0 {
+			b.estUndo(ctx, chatID, estID)
+		}
+
+	case strings.HasPrefix(data, "esttpl:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Шаблоны")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "esttpl:"), 10, 64)
+		if estID > 0 {
+			b.estTplList(ctx, chatID, estID)
+		}
+
+	case strings.HasPrefix(data, "esttpl2:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Вставляю")
+		parts := strings.SplitN(strings.TrimPrefix(data, "esttpl2:"), ":", 2)
+		estID, _ := strconv.ParseInt(parts[0], 10, 64)
+		tplID, _ := strconv.ParseInt(parts[1], 10, 64)
+		if estID > 0 && tplID > 0 {
+			b.estTplApply(ctx, chatID, estID, tplID)
+		}
+
+	case strings.HasPrefix(data, "estroom:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Помещения")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estroom:"), 10, 64)
+		if estID > 0 {
+			b.estRoomList(ctx, chatID, estID)
+		}
+
+	case strings.HasPrefix(data, "estroom2:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Размеры?")
+		parts := strings.SplitN(strings.TrimPrefix(data, "estroom2:"), ":", 2)
+		estID, _ := strconv.ParseInt(parts[0], 10, 64)
+		key := ""
+		if len(parts) == 2 {
+			key = parts[1]
+		}
+		if estID > 0 && key != "" {
+			b.estRoomWait(ctx, chatID, estID, key)
+		}
+
+	case strings.HasPrefix(data, "estact:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Акт из сметы")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estact:"), 10, 64)
+		if estID > 0 {
+			b.estActStart(ctx, chatID, estID)
+		}
+
+	case strings.HasPrefix(data, "estshare:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Ссылка")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estshare:"), 10, 64)
+		if estID > 0 {
+			b.estShareLink(ctx, chatID, estID)
+		}
+
+	case strings.HasPrefix(data, "estdel:"):
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Удаление")
+		estID, _ := strconv.ParseInt(strings.TrimPrefix(data, "estdel:"), 10, 64)
+		if estID > 0 {
+			b.estDeleteConfirm(ctx, chatID, estID)
+		}
+
+	case data == "estdelyes":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Удаляю")
+		b.estDeleteDo(ctx, chatID)
+
+	case data == "estdelno":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Оставил")
+		b.reset(ctx, chatID)
+		b.textKB(ctx, chatID, "Смета на месте 🧾 Список: /smeta", MainMenu())
+
+	// --- v0.6: Google Таблица — источник прайса ------------------------------
+	case data == "psheet":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Google Таблица")
+		b.priceSheetSetup(ctx, chatID)
+
+	case data == "psync":
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Синхронизирую")
+		b.syncPriceNow(ctx, chatID)
+
+	case data == "pexport": // v0.6: прайс → CSV файлом (обратное направление)
+		_ = b.tg.AnswerCallbackQuery(ctx, cq.ID, "Собираю CSV")
+		b.priceExportCSV(ctx, chatID)
 
 	case strings.HasPrefix(data, "adel:"): // v0.3.6: удаление ошибочного акта
 		actID, _ := strconv.ParseInt(strings.TrimPrefix(data, "adel:"), 10, 64)

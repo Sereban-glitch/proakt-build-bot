@@ -85,6 +85,42 @@ export function view({ root, navigate }) {
     grid.appendChild(mkTile('Позиций в прайсе', String(d.price_count), 'price', '#/price'));
     content.appendChild(grid);
 
+    // --- v0.6: онбординг «3 шага до первого акта» (для тех, кто не читал инструкций) ---
+    if (d.stats.objects === 0 || d.price_count === 0 || d.stats.acts === 0) {
+      const onb = Card({ className: 'section onboarding' });
+      const ot = document.createElement('div');
+      ot.className = 'card-title';
+      ot.textContent = '🚀 Старт за 3 шага';
+      onb.appendChild(ot);
+      const steps = [
+        { done: d.price_count > 0, t: '1. Прайс — цены один раз', s: 'Вкладка «Прайс» → импорт файла или вручную. Дальше цены подставляются сами.', h: '#/price' },
+        { done: d.stats.objects > 0, t: '2. Объект — квартира/дом', s: 'Вкладка «Объекты» → «+». Название и заказчик — 20 секунд.', h: '#/objects' },
+        { done: d.stats.acts > 0, t: '3. Первая смета или акт', s: 'Диктуй голосом на объекте или вводи строкой — Excel соберётся сам.', h: '#/estimates' },
+      ];
+      for (const st of steps) {
+        const row = document.createElement('div');
+        row.className = 'onb-step' + (st.done ? ' done' : '');
+        const mark = document.createElement('span');
+        mark.className = 'onb-mark';
+        mark.textContent = st.done ? '✓' : '';
+        const box = document.createElement('div');
+        const t = document.createElement('div');
+        t.className = 'onb-t';
+        t.textContent = st.t;
+        const s = document.createElement('div');
+        s.className = 'onb-s';
+        s.textContent = st.done ? 'Готово' : st.s;
+        box.append(t, s);
+        row.append(mark, box);
+        if (!st.done) {
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', () => { location.hash = st.h; });
+        }
+        onb.appendChild(row);
+      }
+      content.appendChild(onb);
+    }
+
     // --- упущенная выгода (логика отчёта бота) ---
     const debt = d.stats.total - d.stats.paid;
     const unpaid = debt > 0.009;

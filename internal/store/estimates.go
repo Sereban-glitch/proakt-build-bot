@@ -359,13 +359,17 @@ UPDATE estimates SET share_token=$3 WHERE id=$1 AND chat_id=$2 RETURNING share_t
 
 // ShareView — всё, что видит заказчик по публичной ссылке.
 type ShareView struct {
-	ObjectName string                `json:"object_name"`
-	Title      string                `json:"title"`
-	Status     string                `json:"status"`
-	Note       string                `json:"note"`
-	Lines      []domain.EstimateLine `json:"lines"`
-	Photos     []SharePhoto          `json:"photos"`
-	CreatedAt  time.Time             `json:"created_at"`
+	ObjectName string                   `json:"object_name"`
+	Title      string                   `json:"title"`
+	Status     string                   `json:"status"`
+	Note       string                   `json:"note"`
+	Lines      []domain.EstimateLine    `json:"lines"`
+	Photos     []SharePhoto             `json:"photos"`
+	Comments   []domain.EstimateComment `json:"comments"` // v0.6: диалог с мастером
+	CreatedAt  time.Time                `json:"created_at"`
+	// CanApprove — v0.6: показывать заказчику кнопку «Принять смету»
+	// (draft/sent; заполняет handler страницы).
+	CanApprove bool `json:"-"`
 	// деньги считает handler из строк (базовые суммы в БД, коэффициент в смете)
 	Total       float64 `json:"total"`
 	Visible     float64 `json:"visible"`
@@ -418,6 +422,10 @@ WHERE ph.object_id = $1 AND ph.file_path <> '' ORDER BY ph.created_at DESC LIMIT
 				v.Photos = append(v.Photos, p)
 			}
 		}
+	}
+	// v0.6: диалог мастера и заказчика — заказчик видит ответы мастера
+	if comments, err := s.ListCommentsByToken(ctx, token); err == nil {
+		v.Comments = comments
 	}
 	return v, nil
 }

@@ -78,6 +78,8 @@ func priceMenu() tg.InlineKeyboardMarkup {
 		{tg.KBButton{Text: "📄 Список", CallbackData: "plist"}, tg.KBButton{Text: "🔍 Найти", CallbackData: "pfind"}},
 		{tg.KBButton{Text: "➕ Добавить/обновить", CallbackData: "padd"}, tg.KBButton{Text: "🗑 Убрать позицию", CallbackData: "pdel"}},
 		{tg.KBButton{Text: "📥 Импорт из файла", CallbackData: "pimport"}, tg.KBButton{Text: "🧹 Очистить всё", CallbackData: "pclear"}},
+		// v0.6: Google Таблица — источник истины + обратная выгрузка
+		{tg.KBButton{Text: "🌐 Google Таблица", CallbackData: "psheet"}, tg.KBButton{Text: "📤 Выгрузить CSV", CallbackData: "pexport"}},
 	})
 }
 

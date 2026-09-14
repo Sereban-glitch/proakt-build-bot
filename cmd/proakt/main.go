@@ -81,6 +81,10 @@ func main() {
 	}
 
 	bot := app.New(cfg, client, st, gw)
+	// v0.6: фоновые циклы — автобэкап (раз в сутки) и синк прайса
+	// из Google Таблиц (интервал PRICE_SYNC_INTERVAL, по умолчанию 6ч)
+	bot.StartBackupLoop(ctx)
+	bot.StartPriceSyncLoop(ctx, cfg.PriceSyncInterval)
 	log.Printf("старт: бот @%s (%s), long polling", me.Username, me.FirstName)
 	if gw != nil {
 		log.Printf("ai: шлюз %s (текст %s, голос %s) — голос включён",
@@ -98,7 +102,9 @@ func main() {
 			AuthTTL:   cfg.WebappAuthTTL,
 			FilesDir:  cfg.FilesDir,
 			PublicURL: cfg.WebappURL, // share-ссылки смет строятся от него
+			Gateway:   gw,            // v0.6: голос в мини-апп (nil — 503)
 		}, st)
+		wsrv.SetNotifier(bot) // v0.6: заказчик согласовал/спросил → в чат
 		go func() {
 			if err := wsrv.Run(ctx); err != nil {
 				log.Printf("webapp: %v", err)

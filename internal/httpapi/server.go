@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"proakt/internal/ai"
 	"proakt/internal/domain"
 	"proakt/internal/store"
 	"proakt/internal/webapp"
@@ -62,6 +63,19 @@ type Service interface {
 	ListTemplates(ctx context.Context, chatID int64) ([]domain.Template, error)
 	UpsertTemplate(ctx context.Context, chatID int64, name string, lines []domain.TemplateLine) (domain.Template, error)
 	DeleteTemplate(ctx context.Context, chatID int64, id int64) (domain.Template, bool, error)
+
+	// --- v0.6: акт из сметы, фото строки, диалог, Google Таблица ---
+	ActFromEstimate(ctx context.Context, chatID, estID int64, lineIDs []int64) (domain.ActBrief, int, error)
+	EstimateLineOwned(ctx context.Context, chatID, lineID int64) (domain.EstimateLine, error)
+	AddEstLinePhoto(ctx context.Context, chatID, estID, lineID int64, fileID, filePath, caption string) error
+	ListLinePhotos(ctx context.Context, chatID, estID, lineID int64) ([]domain.PhotoRec, error)
+	ListComments(ctx context.Context, chatID, estID int64) ([]domain.EstimateComment, error)
+	AddComment(ctx context.Context, estID int64, author, text string) (domain.EstimateComment, error)
+	PriceSource(ctx context.Context, chatID int64) (domain.PriceSource, error)
+	BulkUpsertCatalog(ctx context.Context, chatID int64, items []domain.CatalogItem) (int, error)
+	MarkPriceSynced(ctx context.Context, chatID int64, count int, syncErr string) error
+	ApproveEstimateByToken(ctx context.Context, token string) (chatID, estID int64, title string, err error)
+	ShareChatID(ctx context.Context, token string) (chatID, estID int64, title string, err error)
 }
 
 // Config — параметры HTTP-сервера.
@@ -71,19 +85,22 @@ type Config struct {
 	AuthTTL   time.Duration // максимум возраста initData (0 = без проверки давности)
 	FilesDir  string        // где лежат фото (FILES_DIR бота)
 	PublicURL string        // публичный адрес Mini App (для share-ссылок заказчику)
+	Gateway   *ai.Gateway   // голос в мини-апп (nil — голос только в чате)
 }
 
 // Server — HTTP-сервер Mini App.
 type Server struct {
-	cfg Config
-	svc Service
-	mux *http.ServeMux
-	srv *http.Server
+	cfg      Config
+	svc      Service
+	ai       *ai.Gateway // голос (v0.6) — nil допустим: голос вернёт 503
+	notifier Notifier    // уведомления мастеру (v0.6; по умолчанию заглушка)
+	mux      *http.ServeMux
+	srv      *http.Server
 }
 
 // New собирает сервер: /api/* — JSON, всё остальное — встроенное веб-приложение.
 func New(cfg Config, svc Service) *Server {
-	s := &Server{cfg: cfg, svc: svc, mux: http.NewServeMux()}
+	s := &Server{cfg: cfg, svc: svc, ai: cfg.Gateway, notifier: noopNotifier{}, mux: http.NewServeMux()}
 	routes(s.mux, s)
 	s.mux.Handle("GET /", webapp.Handler())
 	s.srv = &http.Server{

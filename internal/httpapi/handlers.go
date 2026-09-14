@@ -55,9 +55,24 @@ func routes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("POST /api/templates", a(s.handleTemplateUpsert))
 	mux.HandleFunc("DELETE /api/templates/{id}", a(s.handleTemplateDelete))
 
+	// --- v0.6: герой-сценарий, диалог, Google Таблица ---
+	mux.HandleFunc("POST /api/estimates/{id}/voice", a(s.handleEstimateVoice))
+	mux.HandleFunc("POST /api/estimates/{id}/act", a(s.handleEstimateAct))
+	mux.HandleFunc("GET /api/estimates/{id}/comments", a(s.handleCommentsList))
+	mux.HandleFunc("POST /api/estimates/{id}/comments", a(s.handleCommentAdd))
+	mux.HandleFunc("POST /api/estimates/{id}/lines/{lid}/photo", a(s.handleEstLinePhoto))
+	mux.HandleFunc("GET /api/price/suggest", a(s.handlePriceSuggest))
+	mux.HandleFunc("GET /api/rooms/presets", a(s.handleRoomPresets))
+	mux.HandleFunc("POST /api/rooms/apply", a(s.handleRoomApply))
+	mux.HandleFunc("GET /api/price/source", a(s.handlePriceSource))
+	mux.HandleFunc("POST /api/price/sync", a(s.handlePriceSync))
+
 	// публичный просмотр сметы заказчиком (без auth, доступ по токену)
 	mux.HandleFunc("GET /s/{token}", s.handleSharePage)
 	mux.HandleFunc("GET /s/{token}/photo/{id}", s.handleSharePhoto)
+	mux.HandleFunc("POST /s/{token}/approve", s.handleShareApprove)
+	mux.HandleFunc("POST /s/{token}/comment", s.handleShareComment)
+	mux.HandleFunc("GET /s/{token}/print", s.handleSharePrint)
 }
 
 // --- дашборд -----------------------------------------------------------------

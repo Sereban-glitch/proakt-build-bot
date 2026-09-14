@@ -33,6 +33,14 @@ const COEFFS = [
   { value: 2, label: '×2.0' },
 ];
 
+/** guessHiddenMime — совместимое имя записи для MediaRecorder (v0.6). */
+function pickRecorderMime() {
+  for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return '';
+}
+
 export function view({ root, params }) {
   const estId = Number(params.id);
   let brief = null;
@@ -170,6 +178,8 @@ export function view({ root, params }) {
       return b;
     };
     actions.appendChild(mkBtn('Заказчику', 'share', doShare));
+    actions.appendChild(mkBtn('Акт недели', 'acts', actWeekSheet));
+    actions.appendChild(mkBtn('Диалог', 'message', commentsSheet));
     actions.appendChild(mkBtn('Excel', 'download', () => {
       const url = api.estimateXlsxURL(estId);
       if (String(url).startsWith('/api/')) {
@@ -237,17 +247,36 @@ export function view({ root, params }) {
     }
     content.appendChild(listCard);
 
-    // --- добавить: парсер / прайс / шаблон ---
+    // --- добавление: диктовка / парсер / прайс / шаблон / комната ---
     const addCard = Card({ className: 'section' });
     const addTitle = document.createElement('div');
     addTitle.className = 'card-title';
     addTitle.textContent = 'Добавить позиции';
     addCard.appendChild(addTitle);
 
+    // v0.6: ДИКТОВКА — герой-сценарий. Крупная кнопка у микрофона:
+    // «кухня, стены, штукатурка, примерно сорок квадратов» — строка готова.
+    const micRow = document.createElement('button');
+    micRow.className = 'btn btn-primary btn-block mic-btn';
+    micRow.appendChild(icon('mic', 22));
+    const micLbl = document.createElement('span');
+    micLbl.textContent = 'Диктовать на объекте';
+    micRow.appendChild(micLbl);
+    micRow.addEventListener('click', () => { haptics.medium(); voiceSheet(); });
+    const micWrap = document.createElement('div');
+    micWrap.style.cssText = 'padding:0 14px 10px;';
+    micWrap.appendChild(micRow);
+    addCard.appendChild(micWrap);
+
     const addWrap = document.createElement('div');
     addWrap.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:0 14px 14px;';
     const parseF = Field({ label: 'Строкой — как в чате бота', placeholder: 'шпаклёвка 45 м² 140 или шлифовка 45 м' });
     addWrap.appendChild(parseF.el);
+    // v0.6: умные подсказки из прайса — «меньше печатать»
+    const suggestBox = document.createElement('div');
+    suggestBox.className = 'suggest-box';
+    suggestBox.style.display = 'none';
+    addWrap.appendChild(suggestBox);
     const parseHint = document.createElement('div');
     parseHint.className = 'parse-box';
     parseHint.style.display = 'none';
@@ -257,6 +286,36 @@ export function view({ root, params }) {
     parseF.input.addEventListener('input', () => {
       clearTimeout(parseTimer);
       const text = parseF.input.value.trim();
+      // подсказки: слова ≥2 символов без цифр → топ-5 совпадений прайса
+      if (text.length >= 2 && !/\d/.test(text)) {
+        const q = text.toLowerCase();
+        const hits = priceCache.filter((p) => p.name.includes(q)).slice(0, 5);
+        if (hits.length) {
+          suggestBox.style.display = 'block';
+          suggestBox.replaceChildren(...hits.map((p) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'suggest-item';
+            const n1 = document.createElement('span');
+            n1.textContent = p.name;
+            const n2 = document.createElement('b');
+            n2.className = 'num';
+            n2.textContent = `${trimNum(p.price)}${p.unit ? '/' + p.unit : ''}`;
+            b.append(n1, n2);
+            b.addEventListener('click', () => {
+              haptics.select();
+              parseF.input.value = p.name + ' ';
+              suggestBox.style.display = 'none';
+              parseF.input.focus();
+            });
+            return b;
+          }));
+        } else {
+          suggestBox.style.display = 'none';
+        }
+      } else {
+        suggestBox.style.display = 'none';
+      }
       if (text.length < 3) { parseHint.style.display = 'none'; return; }
       parseTimer = setTimeout(async () => {
         try {
@@ -302,7 +361,15 @@ export function view({ root, params }) {
     sp2.textContent = 'Шаблон';
     fromTpl.appendChild(sp2);
     fromTpl.addEventListener('click', () => { haptics.tap(); templatePicker(); });
-    secondRow.append(fromPrice, fromTpl);
+    const fromRoom = document.createElement('button');
+    fromRoom.className = 'btn btn-secondary';
+    fromRoom.style.cssText = 'flex:1;';
+    fromRoom.appendChild(icon('room', 16));
+    const sp3 = document.createElement('span');
+    sp3.textContent = 'Комната';
+    fromRoom.appendChild(sp3);
+    fromRoom.addEventListener('click', () => { haptics.tap(); roomSheet(); });
+    secondRow.append(fromPrice, fromTpl, fromRoom);
     addWrap.appendChild(secondRow);
     addCard.appendChild(addWrap);
     content.appendChild(addCard);
@@ -368,6 +435,38 @@ export function view({ root, params }) {
     meta.textContent = bits.join(' · ');
     row.appendChild(meta);
 
+    // v0.6: редактирование «на пальцах» — объём стрелками прямо в строке
+    // (мастер поправит «примерно 40» на «42» одним тапом, не открывая лист)
+    if (l.qty > 0) {
+      const quick = document.createElement('div');
+      quick.className = 'qty-quick';
+      const mkQ = (label, delta) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'qty-btn';
+        b.textContent = label;
+        b.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const next = Math.max(0, Math.round((l.qty + delta) * 100) / 100);
+          if (next === l.qty) return;
+          markDirty();
+          haptics.tap();
+          try {
+            const updated = await api.patchEstLine(estId, l.id, { qty: next });
+            Object.assign(l, updated && updated.qty !== undefined ? updated : { qty: next, sum: next * l.price });
+            render();
+          } catch (err) {
+            toast(err.message, { tone: 'danger' });
+          }
+        });
+        return b;
+      };
+      const step = l.unit ? 1 : 1;
+      quick.appendChild(mkQ(`−${step} ${l.unit || ''}`.trim(), -step));
+      quick.appendChild(mkQ(`+${step} ${l.unit || ''}`.trim(), +step));
+      row.appendChild(quick);
+    }
+
     const actions = document.createElement('div');
     actions.className = 'ln-actions';
     const mkIcon = (iconName, aria, cls, onClick) => {
@@ -379,6 +478,7 @@ export function view({ root, params }) {
       b.addEventListener('click', (e) => { e.stopPropagation(); onClick(b); });
       return b;
     };
+    actions.appendChild(mkIcon('image', 'Фото строки', '', () => linePhotoSheet(l)));
     actions.appendChild(mkIcon('done', 'Закрыто актом', l.done ? 'done-on' : '', async (b) => {
       markDirty();
       try {
@@ -651,6 +751,357 @@ export function view({ root, params }) {
     }
   }
 
+  // --- v0.6: ДИКТОВКА (герой-сценарий) ------------------------------------------
+  // MediaRecorder → base64 → POST /voice → транскрипт + позиции → предпросмотр.
+  // Одна диктовка = блокнотная строка в 10 раз быстрее, чем руками.
+  function voiceSheet() {
+    if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+      toast('Запись не поддерживается в этом браузере — диктуй голосом в чат бота', { icon: '🎤' });
+      return;
+    }
+    const status = document.createElement('div');
+    status.className = 'rec-status';
+    const dot = document.createElement('span');
+    dot.className = 'rec-dot';
+    const txt = document.createElement('div');
+    txt.textContent = 'Нажми «Записать» и говори как обычно:\n«кухня, стены, штукатурка, примерно сорок квадратов»';
+    status.append(dot, txt);
+
+    const timer = document.createElement('div');
+    timer.className = 'rec-timer num';
+    timer.textContent = '0:00';
+
+    const startBtn = document.createElement('button');
+    startBtn.className = 'btn btn-primary btn-block';
+    startBtn.textContent = '🎙 Записать';
+    const result = document.createElement('div');
+    result.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+    const sheet = openSheet({ title: '🎤 Диктовка позиций', body: [status, timer, startBtn, result] });
+
+    let recorder = null;
+    let chunks = [];
+    let recMime = pickRecorderMime();
+    let t0 = 0;
+    let tick = null;
+
+    const stopUI = () => {
+      clearInterval(tick);
+      startBtn.disabled = false;
+      startBtn.textContent = '🎙 Записать заново';
+      dot.classList.remove('on');
+    };
+
+    startBtn.addEventListener('click', async () => {
+      if (recorder && recorder.state === 'recording') {
+        recorder.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
+        recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          stopUI();
+          const blob = new Blob(chunks, { type: recMime || 'audio/webm' });
+          if (blob.size < 800) {
+            toast('Слишком коротко — нажми и говори пару секунд', { tone: 'danger' });
+            return;
+          }
+          txt.textContent = 'Распознаю…';
+          result.replaceChildren();
+          const sk = document.createElement('div');
+          sk.className = 'skeleton card-sk';
+          result.appendChild(sk);
+          try {
+            const b64 = await blobToBase64(blob);
+            const res = await api.estimateVoice(estId, b64, blob.type || 'audio/webm');
+            result.replaceChildren();
+            txt.textContent = 'Распознал: «' + (res.transcript || '').slice(0, 140) + '»';
+            if (!res.lines?.length) {
+              toast('Позиций не нашёл — попробуй ещё раз', { tone: 'danger', icon: '🤔' });
+              return;
+            }
+            const total = res.lines.reduce((a, l) => a + (l.sum || l.qty * l.price), 0);
+            for (const l of res.lines) {
+              const row = document.createElement('div');
+              row.className = 'parse-preview';
+              row.innerHTML = `<b>${escapeHtml(l.name)}</b> — ${l.qty} ${l.unit || ''} × ${l.price || 'цена из прайса'} = ${money(l.sum || l.qty * l.price)}`;
+              result.appendChild(row);
+            }
+            const addAll = document.createElement('button');
+            addAll.className = 'btn btn-primary btn-block';
+            addAll.textContent = `Добавить ${res.lines.length} позиц. · ${money(total)}`;
+            addAll.addEventListener('click', async () => {
+              addAll.disabled = true;
+              markDirty();
+              try {
+                const prepared = res.lines.map((l) => ({
+                  name: l.name, qty: l.qty || 1, unit: l.unit || '', price: l.price || 0, hidden: guessHidden(l.name), note: '',
+                }));
+                const r = await api.addEstLinesBulk(estId, prepared);
+                if (r.estimate) brief = { ...brief, ...r.estimate };
+                haptics.success();
+                await reloadLines();
+                render();
+                sheet.close();
+                toast(`Продиктовано: +${prepared.length} позиций`, { icon: '🎤' });
+              } catch (e2) {
+                addAll.disabled = false;
+                toast(e2.message, { tone: 'danger' });
+              }
+            });
+            result.appendChild(addAll);
+            if (res.missing?.length) {
+              const warn = document.createElement('div');
+              warn.className = 'muted';
+              warn.style.cssText = 'font-size:12px;color:var(--warn);';
+              warn.textContent = '⚠ Нет в прайсе: ' + res.missing.join(', ');
+              result.appendChild(warn);
+            }
+          } catch (e2) {
+            result.replaceChildren();
+            txt.textContent = 'Не получилось расшифровать — попробуй ещё раз или введи строкой.';
+          }
+        };
+        recorder.start();
+        t0 = Date.now();
+        tick = setInterval(() => {
+          const s = Math.floor((Date.now() - t0) / 1000);
+          timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        }, 250);
+        dot.classList.add('on');
+        startBtn.textContent = '⏹ Остановить';
+        haptics.medium();
+      } catch {
+        toast('Нет доступа к микрофону — проверь разрешения', { tone: 'danger' });
+      }
+    });
+  }
+
+  // --- v0.6: типовые помещения с нормами ----------------------------------------
+  // «Кухня 9 м²» → потолок = S, стены = периметр×высота, грунт/шпаклёвка
+  // той же площади, плинтус = периметр. Мастер подправляет объёмы тапами.
+  async function roomSheet() {
+    const list = document.createElement('div');
+    list.innerHTML = '<div class="muted" style="padding:8px;font-size:13px;">Загружаю помещения…</div>';
+    const sheet = openSheet({ title: '🏠 Типовое помещение', body: [list] });
+    let presets;
+    try {
+      presets = (await api.roomPresets()).items;
+    } catch (e) {
+      list.innerHTML = `<div class="muted" style="padding:8px;">${escapeHtml(e.message)}</div>`;
+      return;
+    }
+    list.replaceChildren();
+    for (const p of presets) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.style.cssText = 'text-align:left;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-m);padding:12px;cursor:pointer;color:inherit;font:inherit;';
+      const t1 = document.createElement('div');
+      t1.style.cssText = 'font-weight:700;font-size:14px;';
+      t1.textContent = p.name;
+      const t2 = document.createElement('div');
+      t2.style.cssText = 'font-size:12px;color:var(--hint);margin-top:2px;';
+      t2.textContent = `${p.hint} · ${p.lines.length} работ`;
+      b.append(t1, t2);
+      b.addEventListener('click', () => {
+        haptics.select();
+        roomSizes(p);
+      });
+      list.appendChild(b);
+    }
+
+    function roomSizes(preset) {
+      const areaF = Field({ label: 'Площадь пола, м²', inputmode: 'decimal', placeholder: '9' });
+      const heightF = Field({ label: 'Высота, м (пусто — 2.7)', inputmode: 'decimal', placeholder: '2.7' });
+      const perimF = Field({ label: 'Периметр, м (пусто — посчитаю ≈4·√S)', inputmode: 'decimal', placeholder: '12' });
+      const go = document.createElement('button');
+      go.className = 'btn btn-primary btn-block';
+      go.textContent = 'Рассчитать и вставить';
+      go.addEventListener('click', async () => {
+        const area = parseFloat((areaF.input.value || '').replace(',', '.'));
+        if (!area || area <= 0) { areaF.input.focus(); return; }
+        const height = parseFloat((heightF.input.value || '').replace(',', '.')) || 2.7;
+        const perim = parseFloat((perimF.input.value || '').replace(',', '.')) || 0;
+        go.disabled = true;
+        markDirty();
+        try {
+          const res = await api.roomApply(estId, preset.key, area, height, perim);
+          if (res.estimate) brief = { ...brief, ...res.estimate };
+          haptics.success();
+          await reloadLines();
+          render();
+          sheet.close();
+          toast(`«${preset.name}» — вставлено ${res.added} работ${res.missing_prices ? `, без цены: ${res.missing_prices}` : ''}`, { icon: '🏠' });
+        } catch (e2) {
+          go.disabled = false;
+          toast(e2.message, { tone: 'danger' });
+        }
+      });
+      // переиспользуем лист: заменяем содержимое
+      list.replaceChildren(areaF.el, heightF.el, perimF.el, go);
+      sheet.el.querySelector('h3').textContent = `🏠 ${preset.name} — размеры`;
+    }
+  }
+
+  // --- v0.6: АКТ ИЗ СМЕТЫ ЗА НЕДЕЛЮ ------------------------------------------------
+  // Отметил строки, сделанные за неделю → акт с теми же ценами → XLSX.
+  // Еженедельная рутина Виталика: вместо 1–2 часов Excel — минута тапов.
+  function actWeekSheet() {
+    const open = lines.filter((l) => !l.done && (l.qty * l.price) > 0.009);
+    if (!open.length) {
+      toast('Незакрытых строк с суммой нет — отметь готовые или добавь новые', { icon: '✅' });
+      return;
+    }
+    const selected = new Map(open.map((l) => [l.id, false]));
+    const list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-direction:column;gap:2px;max-height:46vh;overflow:auto;';
+    let sum = 0;
+    const totalEl = document.createElement('div');
+    const mkRow = (l) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'cell pick-line';
+      row.style.cssText = 'background:none;border:0;width:100%;font:inherit;text-align:left;border-bottom:1px solid var(--border);padding:10px 4px;';
+      const box = document.createElement('span');
+      box.className = 'pick-box';
+      const nm = document.createElement('div');
+      nm.style.cssText = 'flex:1;min-width:0;';
+      const t = document.createElement('div');
+      t.className = 'cell-title';
+      t.textContent = l.name;
+      const m = document.createElement('div');
+      m.className = 'cell-sub';
+      m.textContent = `${trimNum(l.qty)} ${l.unit || ''} × ${trimNum(l.price)}`;
+      nm.append(t, m);
+      const sv = document.createElement('b');
+      sv.className = 'cell-value num';
+      sv.textContent = money(l.qty * l.price * brief.coeff);
+      row.append(box, nm, sv);
+      row.addEventListener('click', () => {
+        const on = !selected.get(l.id);
+        selected.set(l.id, on);
+        row.classList.toggle('picked', on);
+        box.classList.toggle('on', on);
+        sum += (on ? 1 : -1) * l.qty * l.price * brief.coeff;
+        totalEl.textContent = money(Math.max(0, sum));
+        haptics.select();
+      });
+      return row;
+    };
+    for (const l of open) list.appendChild(mkRow(l));
+    const hint = document.createElement('div');
+    hint.className = 'muted';
+    hint.style.cssText = 'font-size:12.5px;padding:6px 2px;';
+    hint.textContent = 'Отметь, что сделано за неделю. Выбранные строки закроются актом — в следующий акт не попадут.';
+    const go = document.createElement('button');
+    go.className = 'btn btn-primary btn-block';
+    go.textContent = 'Собрать акт · 0';
+    totalEl.style.display = 'none';
+    go.addEventListener('click', async () => {
+      const ids = [...selected.entries()].filter(([, on]) => on).map(([id]) => id);
+      if (!ids.length) { toast('Отметь хотя бы одну строку', { icon: '☑️' }); return; }
+      go.disabled = true;
+      try {
+        const res = await api.estimateAct(estId, ids);
+        haptics.success();
+        await reloadLines();
+        render();
+        sheet.close();
+        toast(`📋 Акт №${res.act.act_no} собран: ${money(res.act.total)} (${res.closed} строк)`, { icon: '📋' });
+      } catch (e2) {
+        go.disabled = false;
+        toast(e2.message, { tone: 'danger' });
+      }
+    });
+    const sheet = openSheet({ title: '📋 Акт за неделю', body: [list, hint, totalEl, go] });
+  }
+
+  // --- v0.6: фото строки --------------------------------------------------------
+  // «Фотографируешь комнату на ходу — фото цепляется к последней строке»:
+  // снимок живёт в фотоотчёте объекта и виден заказчику на странице сметы.
+  function linePhotoSheet(l) {
+    const pick = document.createElement('input');
+    pick.type = 'file';
+    pick.accept = 'image/*';
+    pick.capture = 'environment';
+    pick.style.display = 'none';
+    const info = document.createElement('div');
+    info.className = 'muted';
+    info.style.cssText = 'font-size:13.5px;line-height:1.5;';
+    info.textContent = `Снимок получит подпись «${l.name}» и появится в фотоотчёте объекта и на странице заказчика.`;
+    const shoot = document.createElement('button');
+    shoot.className = 'btn btn-primary btn-block';
+    shoot.textContent = '📷 Сделать снимок';
+    shoot.addEventListener('click', () => pick.click());
+    pick.addEventListener('change', async () => {
+      const f = pick.files?.[0];
+      if (!f) return;
+      shoot.disabled = true;
+      try {
+        await api.linePhoto(estId, l.id, f, '');
+        haptics.success();
+        toast('Фото прикреплено к строке', { icon: '📷' });
+        sheet.close();
+      } catch (e2) {
+        shoot.disabled = false;
+        toast(e2.message, { tone: 'danger' });
+      }
+    });
+    const sheet = openSheet({ title: '📷 Фото к строке', body: [info, shoot, pick] });
+  }
+
+  // --- v0.6: диалог с заказчиком ----------------------------------------------------
+  async function commentsSheet() {
+    const list = document.createElement('div');
+    list.innerHTML = '<div class="muted" style="padding:8px;font-size:13px;">Загружаю диалог…</div>';
+    const sheet = openSheet({ title: '💬 Диалог с заказчиком', body: [list] });
+    let items;
+    try {
+      items = (await api.comments(estId)).items;
+    } catch (e) {
+      list.innerHTML = `<div class="muted" style="padding:8px;">${escapeHtml(e.message)}</div>`;
+      return;
+    }
+    list.replaceChildren();
+    if (!items.length) {
+      list.innerHTML = '<div class="muted" style="padding:6px;font-size:13px;">Пока пусто. Комментарии заказчика со страницы сметы появятся здесь — и наоборот.</div>';
+    }
+    for (const c of items) {
+      const row = document.createElement('div');
+      row.className = 'cmt-msg' + (c.author === 'client' ? ' client' : '');
+      const who = document.createElement('div');
+      who.className = 'cmt-who';
+      who.textContent = c.author === 'client' ? 'Заказчик' : 'Мастер';
+      const tx = document.createElement('div');
+      tx.textContent = c.text;
+      row.append(who, tx);
+      list.appendChild(row);
+    }
+    const field = Field({ label: 'Ответить заказчику', placeholder: 'например: плитку поменять можно, посчитаю…' });
+    const send = document.createElement('button');
+    send.className = 'btn btn-primary btn-block';
+    send.textContent = 'Отправить';
+    send.addEventListener('click', async () => {
+      const text = field.input.value.trim();
+      if (!text) { field.input.focus(); return; }
+      send.disabled = true;
+      try {
+        await api.addComment(estId, text);
+        haptics.success();
+        sheet.close();
+        toast('Ответ отправлен — заказчик увидит на странице', { icon: '💬' });
+      } catch (e2) {
+        send.disabled = false;
+        toast(e2.message, { tone: 'danger' });
+      }
+    });
+    list.append(field.el, send);
+  }
+
   return {
     el,
     cleanup() {
@@ -660,6 +1111,19 @@ export function view({ root, params }) {
 }
 
 // --- утилиты -----------------------------------------------------------------
+
+/** blobToBase64 — Blob → base64 (без data:-префикса) для POST /voice. */
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = String(r.result);
+      resolve(s.slice(s.indexOf(',') + 1));
+    };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
 
 function trimNum(v) {
   const n = Math.round(v * 100) / 100;

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"proakt/internal/domain"
 )
@@ -70,6 +71,22 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--hint
      color:var(--sub);font-size:12.5px;line-height:1.5}
 #lb{position:fixed;inset:0;background:rgba(5,10,16,.88);display:none;align-items:center;justify-content:center;z-index:9;cursor:zoom-out}
 #lb img{max-width:96vw;max-height:92vh;border-radius:10px}
+.approve{background:linear-gradient(135deg, rgba(46,204,113,.14), rgba(56,189,248,.10));border:1px solid rgba(46,204,113,.35);
+         border-radius:16px;padding:16px;margin-top:4px}
+.approve-t{font-weight:700;font-size:15px;margin-bottom:4px}
+.approve-s{font-size:12.5px;color:var(--sub);margin-bottom:12px}
+.appr-btn{width:100%;border:0;border-radius:12px;padding:13px;font:inherit;font-weight:700;font-size:15px;cursor:pointer;
+          background:#2ecc71;color:#06281a}
+.appr-btn:active{transform:scale(.98)}
+.cmt .n{color:var(--accent)}
+.cmt.mine .n{color:var(--ok)}
+.cmt-form{display:flex;gap:8px;margin-top:10px}
+.cmt-form textarea{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--text);
+                   font:inherit;font-size:14px;padding:10px 12px;resize:none;min-height:44px}
+.cmt-send{border:0;border-radius:12px;padding:0 16px;font:inherit;font-weight:600;cursor:pointer;
+          background:var(--accent);color:#06243a}
+.print-link{margin-top:14px;text-align:center;font-size:13px}
+.print-link a{color:var(--accent);text-decoration:none}
 </style></head><body>
 <div class="wrap">
   <h1>{{.Title}}<span class="badge {{StatusClass .Status}}">{{StatusText .Status}}</span></h1>
@@ -113,12 +130,78 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--hint
   </section>
   {{end}}
 
+  {{/* --- v0.6: согласование и диалог --- */}}
+  {{if .CanApprove}}
+  <section>
+    <div class="approve">
+      <div class="approve-t">Смета вас устраивает?</div>
+      <div class="approve-s">Нажмите — мастер сразу получит уведомление и приступит к закупкам/работам.</div>
+      <button id="appr-btn" class="appr-btn" onclick="clientAction('approve', {}, this)">✅ Принять смету</button>
+    </div>
+  </section>
+  {{end}}
+
+  <section>
+    <h2>Вопросы и комментарии</h2>
+    {{if .Comments}}
+    <div class="card">
+      {{range .Comments}}
+      <div class="row cmt{{if eq .Author "client"}} mine{{end}}">
+        <div class="n">{{if eq .Author "client"}}Вы{{else}}Мастер{{end}}</div>
+        <div class="s">{{TimeShort .CreatedAt}}</div>
+        <div class="note">{{.Text}}</div>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="tip">Пока без комментариев — напишите вопрос мастеру ниже (например: «можно ли поменять плитку на другую?»).</div>
+    {{end}}
+    <div class="cmt-form">
+      <textarea id="cmt-text" maxlength="500" rows="2" placeholder="Ваш вопрос или комментарий…"></textarea>
+      <button id="cmt-send" class="cmt-send" onclick="sendComment()">Отправить</button>
+    </div>
+  </section>
+
+  <div class="print-link"><a href="print">🖨 Печать / сохранить в PDF</a></div>
+
   <div class="foot">Смета сформирована приложением «ПрорАКТ» · мастер ведёт учёт работ и денег<br>
   Суммы указаны с учётом сложности работ. Вопросы — пишите мастеру в Telegram.</div>
 </div>
 <div id="lb" onclick="this.style.display='none'"><img id="lbimg" alt=""></div>
 <script>
 function lb(im){var l=document.getElementById('lb');document.getElementById('lbimg').src=im.src;l.style.display='flex';}
+
+// --- v0.6: согласование и диалог (токен — из адреса страницы) ---
+var TOKEN = location.pathname.split('/')[2];
+
+function clientAction(action, body, btn){
+  btn.disabled = true;
+  fetch('/s/' + TOKEN + '/' + action, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})
+  }).then(function(r){
+    return r.json().then(function(j){ return {ok: r.ok, j: j}; });
+  }).then(function(res){
+    if (res.ok) {
+      if (action === 'approve') {
+        alert('Спасибо! Смета отмечена как согласованная — мастер получил уведомление.');
+        location.reload();
+      } else {
+        location.reload();
+      }
+    } else {
+      alert((res.j && res.j.error) || 'Не получилось');
+      btn.disabled = false;
+    }
+  }).catch(function(){ alert('Нет связи — попробуйте ещё раз'); btn.disabled = false; });
+}
+
+function sendComment(){
+  var t = document.getElementById('cmt-text');
+  if (!t.value.trim()) { t.focus(); return; }
+  clientAction('comment', {text: t.value.trim()}, document.getElementById('cmt-send'));
+}
 </script>
 </body></html>`
 
@@ -179,6 +262,11 @@ var shareTmpl = template.Must(template.New("share").Funcs(template.FuncMap{
 		}
 		return ""
 	},
+	// v0.6: «31 авг 15:04» для комментариев
+	"TimeShort": func(t time.Time) string {
+		return t.Format("02.01 15:04")
+	},
+	"EqAuthor": func(a, b string) bool { return a == b },
 }).Parse(shareTmplSrc))
 
 func fmtInt(v int64) string {

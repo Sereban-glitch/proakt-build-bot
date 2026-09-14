@@ -83,6 +83,36 @@ const live = {
   templates: () => request('/templates'),
   upsertTemplate: (name, lines) => request('/templates', { method: 'POST', body: { name, lines } }),
   deleteTemplate: (id) => request(`/templates/${id}`, { method: 'DELETE' }),
+
+  // --- v0.6: герой-сценарий на объекте ---
+  /** Диктовка: {audio: base64, mime} → {transcript, lines:[DraftLine], missing:[names]} */
+  estimateVoice: (id, audio, mime) => request(`/estimates/${id}/voice`, { method: 'POST', body: { audio, mime } }),
+  /** Акт из сметы: {line_ids} или {all_pending:true} → {act, closed, act_lines} */
+  estimateAct: (id, lineIds) => request(`/estimates/${id}/act`, { method: 'POST', body: { line_ids: lineIds } }),
+  /** Подсказки прайса: «кух…» → топ-8 позиций */
+  priceSuggest: (q) => request(`/price/suggest?q=${encodeURIComponent(q)}`),
+  /** Комментарии сметы (диалог с заказчиком) */
+  comments: (id) => request(`/estimates/${id}/comments`),
+  addComment: (id, text) => request(`/estimates/${id}/comments`, { method: 'POST', body: { text } }),
+  /** Фото строки: multipart FormData (без JSON-заголовка) */
+  linePhoto: async (id, lineId, file, caption = '') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (caption) fd.append('caption', caption);
+    const headers = {};
+    if (initData) headers['X-Telegram-Init-Data'] = initData;
+    const res = await fetch(`/api/estimates/${id}/lines/${lineId}/photo`, { method: 'POST', headers, body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, data?.error || `Ошибка (${res.status})`);
+    return data;
+  },
+  /** Типовые помещения с нормами (потолок = S, стены = P×h) */
+  roomPresets: () => request('/rooms/presets'),
+  roomApply: (estId, preset, area, height, perimeter) =>
+    request('/rooms/apply', { method: 'POST', body: { est_id: estId, preset, area, height, perimeter } }),
+  /** Google Таблица: состояние и синк */
+  priceSource: () => request('/price/source'),
+  priceSync: () => request('/price/sync', { method: 'POST', body: {} }),
 };
 
 /** Публичный API: demo → mock, иначе → живой бэкенд. */

@@ -122,6 +122,29 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   version    INT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- v0.6: фото, привязанное к строке сметы («снял комнату — снимок к строке
+-- "штукатурка 40 м²"»). Nullable + ON DELETE SET NULL: старые фото не трогаем.
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS est_line_id BIGINT REFERENCES estimate_lines(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_photos_line ON photos(est_line_id);
+-- v0.6: диалог мастера и заказчика прямо на смете.
+CREATE TABLE IF NOT EXISTS estimate_comments (
+  id         BIGSERIAL PRIMARY KEY,
+  est_id     BIGINT NOT NULL REFERENCES estimates(id) ON DELETE CASCADE,
+  author     TEXT NOT NULL DEFAULT 'master', -- master | client
+  text       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_est_comments_est ON estimate_comments(est_id);
+-- v0.6: источник прайса (Google Таблица) — одна ссылка на чат.
+CREATE TABLE IF NOT EXISTS price_sources (
+  chat_id    BIGINT PRIMARY KEY,
+  url        TEXT NOT NULL,
+  file_id    TEXT NOT NULL DEFAULT '',
+  gid        TEXT NOT NULL DEFAULT '',
+  last_sync  TIMESTAMPTZ NOT NULL DEFAULT 'epoch',
+  last_count INT NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT ''
+);
 `
 
 type Store struct{ pool *pgxpool.Pool }
@@ -147,13 +170,17 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 
 func (s *Store) Close() { s.pool.Close() }
 
-// Migrate — идемпотентное применение схемы.
+// Migrate — идемпотентное применение схемы (CREATE/ALTER IF NOT EXISTS —
+// можно накатывать на живую базу сколько угодно раз).
 func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := s.pool.Exec(ctx, schema); err != nil {
 		return fmt.Errorf("schema: %w", err)
 	}
-	_, err := s.pool.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES (1) ON CONFLICT DO NOTHING")
-	return err
+	if _, err := s.pool.Exec(ctx, `
+INSERT INTO schema_migrations(version) VALUES (1), (2) ON CONFLICT DO NOTHING`); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- пользователи и FSM -----------------------------------------------------
@@ -440,11 +467,52 @@ func (s *Store) Payments(ctx context.Context, actID int64) ([]domain.Payment, er
 
 // --- фото -------------------------------------------------------------------
 
+// AddPhoto — запись фото (actID/estLineID могут быть nil: привязка к объекту).
+// estLineID — фото строки сметы (v0.6: «фото цепляется к последней строке»).
 func (s *Store) AddPhoto(ctx context.Context, actID *int64, objectID int64, fileID, filePath, caption string) error {
 	_, err := s.pool.Exec(ctx,
 		"INSERT INTO photos(act_id, object_id, file_id, file_path, caption) VALUES($1,$2,$3,$4,$5)",
 		actID, objectID, fileID, filePath, caption)
 	return err
+}
+
+// AddEstLinePhoto — фото с привязкой к строке сметы (v0.6). Объект выводится
+// из строки, так что фото всегда живёт в правильном фотоотчёте объекта.
+func (s *Store) AddEstLinePhoto(ctx context.Context, chatID, estID, lineID int64, fileID, filePath, caption string) error {
+	tag, err := s.pool.Exec(ctx, `
+INSERT INTO photos(act_id, object_id, est_line_id, file_id, file_path, caption)
+SELECT NULL, e.object_id, $3, $4, $5, $6
+FROM estimates e WHERE e.id = $1 AND e.chat_id = $2`, estID, chatID, lineID, fileID, filePath, caption)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListLinePhotos — фото строки сметы, новые сверху (v0.6).
+func (s *Store) ListLinePhotos(ctx context.Context, chatID, estID, lineID int64) ([]domain.PhotoRec, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT ph.id, ph.act_id, ph.object_id, ph.file_id, ph.file_path, ph.caption, ph.created_at, 0
+FROM photos ph
+JOIN estimates e ON e.id = $2 AND e.chat_id = $3
+WHERE ph.est_line_id = $1
+ORDER BY ph.created_at DESC, ph.id DESC LIMIT 20`, lineID, estID, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.PhotoRec
+	for rows.Next() {
+		var p domain.PhotoRec
+		if err := rows.Scan(&p.ID, &p.ActID, &p.ObjectID, &p.FileID, &p.FilePath, &p.Caption, &p.CreatedAt, &p.ActNo); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // GetPhoto — фото по id (только своего чата) для подтверждения удаления (v0.3.8).

@@ -81,16 +81,26 @@ func (g *Gateway) auth(req *http.Request) {
 // Если модель всё-таки ответила «не вижу аудио» (форму снова сменили на шлюзе) —
 // считаем это ошибкой, а не транскриптом.
 func (g *Gateway) Transcribe(ctx context.Context, ogg []byte) (string, error) {
-	if len(ogg) == 0 {
+	return g.TranscribeMime(ctx, ogg, "audio/ogg")
+}
+
+// TranscribeMime — то же с произвольным аудио-mime (v0.6: мини-апп шлёт
+// MediaRecorder — webm/opus на Android/desktop, mp4/aac на iOS; Gemini
+// понимает оба, mime передаём честно).
+func (g *Gateway) TranscribeMime(ctx context.Context, audio []byte, mime string) (string, error) {
+	if len(audio) == 0 {
 		return "", errors.New("ai: пустое аудио")
 	}
-	b64 := base64.StdEncoding.EncodeToString(ogg)
+	if mime == "" {
+		mime = "audio/ogg"
+	}
+	b64 := base64.StdEncoding.EncodeToString(audio)
 	text := map[string]string{"type": "text", "text": transcriptPrompt}
-	audio := map[string]any{
+	block := map[string]any{
 		"type": "image",
 		"source": map[string]string{
 			"type":       "base64",
-			"media_type": "audio/ogg",
+			"media_type": mime,
 			"data":       b64,
 		},
 	}
@@ -98,7 +108,7 @@ func (g *Gateway) Transcribe(ctx context.Context, ogg []byte) (string, error) {
 	if model == "" {
 		model = g.model
 	}
-	txt, err := g.message(ctx, model, "", []any{text, audio}, g.httpL, 8192)
+	txt, err := g.message(ctx, model, "", []any{text, block}, g.httpL, 8192)
 	if err != nil {
 		return "", err
 	}

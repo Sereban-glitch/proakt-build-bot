@@ -455,4 +455,107 @@ Object.assign(mock, {
     const [t] = templates.splice(i, 1);
     return { deleted: true, template: t };
   },
+
+  /* ============ v0.6: герой-сценарий, диалог, комнаты, Google Sheets ============ */
+
+  /** demo-диктовка: имитирует транскрипт и позиции с ценами из demo-прайса. */
+  async estimateVoice(_id, _audio, _mime) {
+    await wait(1400);
+    const transcript = 'кухня, стены, штукатурка, примерно сорок квадратов, грунтовка сорок, демонтаж перегородки две тысячи';
+    const lines = [
+      { name: 'штукатурка стен', qty: 40, unit: 'м²', price: 260, sum: 10400 },
+      { name: 'грунтовка стен', qty: 40, unit: 'м²', price: 25, sum: 1000 },
+      { name: 'демонтаж перегородки', qty: 1, unit: '', price: 2475, sum: 2475 },
+    ];
+    return { transcript, lines, missing: [] };
+  },
+  async estimateAct(id, lineIds) {
+    await wait(900);
+    const list = estLines[id] || [];
+    const picked = lineIds ? list.filter((l) => lineIds.includes(l.id) && !l.done) : list.filter((l) => !l.done);
+    if (!picked.length) throw new Error('закрывать нечего');
+    const obj = objects.find((o) => o.id === (estimates.find((x) => x.id === id) || {}).object_id) || objects[0];
+    const actNo = Math.max(...acts.filter((a) => a.object_id === obj.id).map((a) => a.act_no), 0) + 1;
+    const brief = {
+      id: Math.max(...acts.map((a) => a.id)) + 1, act_no: actNo, object_id: obj.id,
+      object_name: obj.name, customer: obj.customer, total: 0, paid: 0, photos: 0, date: new Date().toISOString(),
+    };
+    let total = 0;
+    for (const l of picked) {
+      total += l.qty * l.price;
+      l.done = true;
+    }
+    brief.total = total;
+    linesByAct[brief.id] = picked.map((l, i) => ({ pos: i + 1, name: l.name, qty: l.qty, unit: l.unit, price: l.price, sum: l.qty * l.price }));
+    acts.unshift(brief);
+    return { act: brief, closed: picked.length, act_lines: linesByAct[brief.id], xlsx_url: `/api/acts/${brief.id}/xlsx` };
+  },
+  async priceSuggest(q) {
+    await wait(120);
+    const query = (q || '').toLowerCase();
+    return { items: catalog.filter((c) => c.name.includes(query)).slice(0, 8) };
+  },
+  async comments(id) {
+    await wait(240);
+    return { items: (commentsByEst[id] = commentsByEst[id] || []).slice() };
+  },
+  async addComment(id, text) {
+    await wait(320);
+    const c = { id: Date.now(), est_id: id, author: 'master', text, created_at: new Date().toISOString() };
+    (commentsByEst[id] = commentsByEst[id] || []).push(c);
+    return c;
+  },
+  async linePhoto(_id, _lineId, _file, _caption) {
+    await wait(600);
+    return { saved: true, photos: [] };
+  },
+  async roomPresets() {
+    await wait(200);
+    return { items: [
+      { key: 'room', name: 'Комната', hint: 'потолок, стены, пол — полный цикл', lines: [] },
+      { key: 'kitchen', name: 'Кухня', hint: 'фартук, стены под плитку/покраску', lines: [] },
+      { key: 'bath', name: 'Ванная', hint: 'гидроизоляция, плитка, сантехника', lines: [] },
+      { key: 'wc', name: 'Туалет', hint: 'маленькое помещение — плитка и сантехника', lines: [] },
+      { key: 'hall', name: 'Коридор / прихожая', hint: 'стены + пол, часто ламинат', lines: [] },
+      { key: 'balcony', name: 'Балкон / лоджия', hint: 'утепление, мелкий цикл', lines: [] },
+    ] };
+  },
+  async roomApply(estId, preset, area, height = 2.7, perimeter = 0) {
+    await wait(700);
+    const perim = perimeter || 4 * Math.sqrt(area);
+    const norm = {
+      room: ['штукатурка стен|м²|P*h|260', 'грунтовка стен|м²|P*h|25', 'шпаклёвка потолка в 2 слоя|м²|S|120', 'покраска потолка|м²|S|50', 'стяжка пола|м²|S|300', 'покраска стен|м²|P*h|90'],
+      kitchen: ['штукатурка стен|м²|P*h|260', 'плитка на пол|м²|S|400', 'стяжка пола|м²|S|300'],
+      bath: ['гидроизоляция пола|м²|S|120', 'плитка на пол|м²|S|400', 'плитка на стены|м²|P*h|450'],
+      wc: ['гидроизоляция пола|м²|S|120', 'плитка на стены|м²|P*h|450'],
+      hall: ['штукатурка стен|м²|P*h|260', 'ламинат, укладка|м²|S|180'],
+      balcony: ['утепление стен|м²|P*h|150', 'гипсокартон, монтаж|м²|P*h|210'],
+    };
+    const src = norm[preset] || norm.room;
+    const hiddenRe = /грунт|шпакл|шлиф|армир|штроб|гидроизол|гипсокартон|утепл|стяжк/;
+    const added = src.map((row) => {
+      const [name, unit, srcc, priceS] = row.split('|');
+      let qty;
+      if (srcc === 'S') qty = area;
+      else if (srcc === 'P*h') qty = perim * height;
+      else qty = 1;
+      qty = Math.round(qty * 100) / 100;
+      return {
+        id: ++lineSeq, est_id: estId, pos: 0, name, qty, unit,
+        price: parseFloat(priceS), sum: qty * parseFloat(priceS),
+        hidden: hiddenRe.test(name), done: false, note: '',
+      };
+    });
+    const list = (estLines[estId] = estLines[estId] || []);
+    for (const l of added) { l.pos = list.length + 1; list.push(l); }
+    return { added: added.length, missing_prices: 0, estimate: await mock.estimate(estId).then((r) => r.estimate), lines: added };
+  },
+  async priceSource() { await wait(150); return { connected: false }; },
+  async priceSync() { await wait(1100); return { synced: 82, total: catalog.length + 82, duration_ms: 1050 }; },
 });
+
+/** диалоги смет (demo) — отдельно, чтобы Object.assign выше остался читаемым */
+const commentsByEst = { 3: [
+  { id: 1, est_id: 3, author: 'client', text: 'Почему подготовка стоит почти половину сметы?', created_at: daysAgo(2, 10) },
+  { id: 2, est_id: 3, author: 'master', text: 'Грунт, шпаклёвка в 2 слоя и шлифовка — без них покраска облезет через год. Фото этапов на странице.', created_at: daysAgo(2, 12) },
+] };

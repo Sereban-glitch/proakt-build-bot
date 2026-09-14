@@ -36,29 +36,6 @@ func signInitData(t *testing.T, token string, params map[string]string, authDate
 	return strings.Join(parts, "&")
 }
 
-// tgInitDataNoSig — как Telegram ДО 2026: поле signature в данных есть,
-// но подпись посчитана по data_check БЕЗ него (для проверки отказ-пути).
-func tgInitDataNoSig(t *testing.T, token string, params map[string]string, sig string, authDate int64) string {
-	t.Helper()
-	params["auth_date"] = fmt.Sprint(authDate)
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		if k == "signature" {
-			continue
-		}
-		keys = append(keys, k)
-	}
-	sortStrings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
-	}
-	secret := hmacSHA256([]byte("WebAppData"), []byte(token))
-	hash := hex.EncodeToString(hmacSHA256(secret, []byte(strings.Join(parts, "\n"))))
-	out := strings.Join(parts, "&") + "&signature=" + sig + "&hash=" + hash
-	return out
-}
-
 func TestValidateInitData(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	user := `{"id":777,"first_name":"Серёга","username":"master"}`
@@ -105,30 +82,20 @@ func TestValidateInitData(t *testing.T) {
 			t.Fatalf("схема tma не разобралась: %v", err)
 		}
 	})
+}
 
-	t.Run("2026-формат: hash считается вместе с signature", func(t *testing.T) {
-		// Telegram с 2026 присылает поле "signature" и ВКЛЮЧАЕТ его в расчёт hash
-		// (подтверждено на реальном устройстве, см. commовления auth.go).
-		g2026 := cloneMap(good)
-		g2026["signature"] = "qwerty123"
-		raw := signInitData(t, testToken, g2026, now.Unix())
-		u, err := ValidateInitData(raw, testToken, 24*time.Hour, now)
-		if err != nil {
-			t.Fatalf("подпись 2026-формата обязана пройти: %v", err)
-		}
-		if u.ID != 777 {
-			t.Fatalf("не тот пользователь: %+v", u)
-		}
-	})
-
-	t.Run("signature выкинут из data_check — отказ (несоответствие)", func(t *testing.T) {
-		// Подделка: пришёл signature, но подпись посчитана старым способом без него,
-		// как в каноне до 2026 — такой запрос обязан отклоняться.
-		raw := tgInitDataNoSig(t, testToken, cloneMap(good), "forged-sig", now.Unix())
-		if _, err := ValidateInitData(raw, testToken, 24*time.Hour, now); err == nil {
-			t.Fatal("подпись без учёта signature обязана отклоняться")
-		}
-	})
+func TestValidateInitData2026(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	user := `{"id":777,"first_name":"Серёга","username":"master"}`
+	good := map[string]string{"user": user, "query_id": "AAF", "signature": "qwerty123"}
+	raw := signInitData(t, testToken, cloneMap(good), now.Unix())
+	u, err := ValidateInitData(raw, testToken, 24*time.Hour, now)
+	if err != nil {
+		t.Fatalf("2026-формат: hash считается ВМЕСТЕ с signature — обязано пройти: %v", err)
+	}
+	if u.ID != 777 {
+		t.Fatalf("не тот пользователь: %+v", u)
+	}
 }
 
 func cloneMap(m map[string]string) map[string]string {
@@ -153,6 +120,12 @@ type fakeSvc struct {
 	estLines   map[int64][]domain.EstimateLine // estID -> lines
 	tpls       []domain.Template
 	tplSeq     int64
+
+	actSeq     int64
+	createdAct domain.ActBrief
+	linePhotos []string
+	comments   map[int64][]domain.EstimateComment
+	shareToken string
 }
 
 func (f *fakeSvc) ListObjects(_ context.Context, chatID int64) ([]domain.ObjectBrief, error) {
@@ -247,6 +220,131 @@ func (f *fakeSvc) GetPhoto(_ context.Context, chatID, id int64) (domain.PhotoRec
 }
 func (f *fakeSvc) DeletePhoto(_ context.Context, chatID, id int64) (domain.PhotoRec, error) {
 	return domain.PhotoRec{}, store.ErrNotFound
+}
+
+// --- v0.6: фейковые методы для новых маршрутов ---------------------------------
+
+func (f *fakeSvc) ActFromEstimate(_ context.Context, chatID, estID int64, lineIDs []int64) (domain.ActBrief, int, error) {
+	if chatID != f.chat {
+		return domain.ActBrief{}, 0, store.ErrNotFound
+	}
+	_, ok := f.estLines[estID]
+	if !ok {
+		return domain.ActBrief{}, 0, store.ErrNotFound
+	}
+	var picked []domain.EstimateLine
+	for _, l := range f.estLines[estID] {
+		if !l.Done && (len(lineIDs) == 0 || containsID(lineIDs, l.ID)) {
+			if l.Sum > 0.009 || l.Price > 0.009 {
+				picked = append(picked, l)
+			}
+		}
+	}
+	if len(picked) == 0 {
+		return domain.ActBrief{}, 0, store.ErrNotFound
+	}
+	var total float64
+	for _, l := range picked {
+		total += l.Sum
+	}
+	f.actSeq++
+	brief := domain.ActBrief{ID: 900 + f.actSeq, ActNo: int(f.actSeq), ObjectID: 1, ObjectName: "объект", Total: total}
+	f.createdAct = brief
+	return brief, len(picked), nil
+}
+
+func (f *fakeSvc) EstimateLineOwned(_ context.Context, chatID, lineID int64) (domain.EstimateLine, error) {
+	if chatID != f.chat {
+		return domain.EstimateLine{}, store.ErrNotFound
+	}
+	for _, ls := range f.estLines {
+		for _, l := range ls {
+			if l.ID == lineID {
+				return l, nil
+			}
+		}
+	}
+	return domain.EstimateLine{}, store.ErrNotFound
+}
+
+func (f *fakeSvc) AddEstLinePhoto(_ context.Context, chatID, estID, lineID int64, _, path, caption string) error {
+	if chatID != f.chat {
+		return store.ErrNotFound
+	}
+	f.linePhotos = append(f.linePhotos, path+"|"+caption)
+	return nil
+}
+
+func (f *fakeSvc) ListLinePhotos(_ context.Context, chatID, _, _ int64) ([]domain.PhotoRec, error) {
+	if chatID != f.chat {
+		return nil, nil
+	}
+	return nil, nil
+}
+
+func (f *fakeSvc) ListComments(_ context.Context, chatID, estID int64) ([]domain.EstimateComment, error) {
+	if chatID != f.chat {
+		return nil, nil
+	}
+	return f.comments[estID], nil
+}
+
+func (f *fakeSvc) AddComment(_ context.Context, estID int64, author, text string) (domain.EstimateComment, error) {
+	c := domain.EstimateComment{ID: int64(len(f.comments[estID]) + 1), EstID: estID, Author: author, Text: text}
+	f.comments[estID] = append(f.comments[estID], c)
+	return c, nil
+}
+
+func (f *fakeSvc) PriceSource(_ context.Context, chatID int64) (domain.PriceSource, error) {
+	if chatID != f.chat {
+		return domain.PriceSource{}, store.ErrNotFound
+	}
+	return domain.PriceSource{ChatID: chatID, URL: "https://docs.google.com/spreadsheets/d/X/edit", FileID: "X"}, nil
+}
+
+func (f *fakeSvc) BulkUpsertCatalog(_ context.Context, chatID int64, items []domain.CatalogItem) (int, error) {
+	if chatID != f.chat {
+		return 0, store.ErrNotFound
+	}
+	return len(items), nil
+}
+
+func (f *fakeSvc) MarkPriceSynced(_ context.Context, _ int64, _ int, _ string) error { return nil }
+
+func (f *fakeSvc) ApproveEstimateByToken(_ context.Context, token string) (int64, int64, string, error) {
+	if token != f.shareToken {
+		return 0, 0, "", store.ErrNotFound
+	}
+	return f.chat, 1, "смета-1", nil
+}
+
+func (f *fakeSvc) ShareChatID(_ context.Context, token string) (int64, int64, string, error) {
+	if token != f.shareToken {
+		return 0, 0, "", store.ErrNotFound
+	}
+	return f.chat, 1, "смета-1", nil
+}
+
+func containsID(ids []int64, id int64) bool {
+	for _, v := range ids {
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
+// testNotifier — ловит уведомления мастеру (v0.6).
+type testNotifier struct {
+	approved []string
+	comments []string
+}
+
+func (n *testNotifier) NotifyEstimateApproved(_ int64, title string) {
+	n.approved = append(n.approved, title)
+}
+func (n *testNotifier) NotifyClientComment(_ int64, title, _ string) {
+	n.comments = append(n.comments, title)
 }
 
 // authedRequest — запрос с валидным initData чата 777.

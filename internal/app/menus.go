@@ -10,6 +10,7 @@ import (
 // Кнопки главного меню (постоянная клавиатура — крупные мишени).
 const (
 	BtnNewAct = "📋 Новый акт"
+	BtnSmeta  = "🧾 Сметы"
 	BtnPhoto  = "📷 Фото"
 	BtnDebts  = "💰 Долги"
 	BtnPrice  = "💵 Прайс"
@@ -18,6 +19,7 @@ const (
 	BtnReport = "📊 Отчёт"
 	BtnBack   = "🔙 Главное"
 	BtnFinish = "✅ Завершить акт"
+	BtnEstFin = "✅ Готово"
 	BtnUndo   = "↩️ Убрать последнюю"
 	BtnDraft  = "👀 Черновик"
 	BtnCancel = "⏹ Отмена"
@@ -33,8 +35,9 @@ const (
 func MainMenu() tg.ReplyKeyboardMarkup {
 	return tg.Reply(tg.KB{
 		{tg.KBButton{Text: BtnNewAct}, tg.KBButton{Text: BtnPhoto}},
-		{tg.KBButton{Text: BtnDebts}, tg.KBButton{Text: BtnPrice}},
-		{tg.KBButton{Text: BtnObjs}, tg.KBButton{Text: BtnMore}},
+		{tg.KBButton{Text: BtnSmeta}, tg.KBButton{Text: BtnDebts}},
+		{tg.KBButton{Text: BtnPrice}, tg.KBButton{Text: BtnObjs}},
+		{tg.KBButton{Text: BtnMore}},
 	}, "Диктуй или нажми…")
 }
 
@@ -55,6 +58,15 @@ func ActMenu() tg.ReplyKeyboardMarkup {
 	}, "Вводи позицию строкой или голосом 🎤 Ошибся — ↩️")
 }
 
+// EstInputMenu — меню ввода строк сметы (v0.6): свернуть/убрать последнюю.
+func EstInputMenu() tg.ReplyKeyboardMarkup {
+	return tg.Reply(tg.KB{
+		{tg.KBButton{Text: BtnEstFin}},
+		{tg.KBButton{Text: BtnUndo}},
+		{tg.KBButton{Text: BtnCancel}},
+	}, "Строкой или голосом 🎤 Ошибся — ↩️")
+}
+
 // CancelMenu — меню с одной кнопкой отмены.
 func CancelMenu() tg.ReplyKeyboardMarkup {
 	return tg.Reply(tg.KB{{tg.KBButton{Text: BtnCancel}}}, "…")
@@ -65,13 +77,16 @@ func Commands() []tg.BotCommand {
 	return []tg.BotCommand{
 		{Command: "start", Description: "запуск и инструкция"},
 		{Command: "new", Description: "новый акт"},
+		{Command: "smeta", Description: "сметы: конструктор, акт из сметы"},
 		{Command: "draft", Description: "текущий черновик акта"},
 		{Command: "photo", Description: "фото скрытых работ"},
 		{Command: "debts", Description: "долги и оплаты"},
-		{Command: "price", Description: "прайс-лист и импорт из файла"},
+		{Command: "price", Description: "прайс-лист, импорт, Google Таблица"},
+		{Command: "sync", Description: "синхронизировать прайс с таблицей"},
 		{Command: "acts", Description: "список актов"},
 		{Command: "objects", Description: "объекты"},
 		{Command: "report", Description: "сводка за всё время"},
+		{Command: "backup", Description: "выгрузка смет и актов файлом"},
 		{Command: "cancel", Description: "отменить действие"},
 		{Command: "help", Description: "инструкция по шагам"},
 	}
@@ -135,6 +150,11 @@ func (b *Bot) instruction() string {
 
 ШАГ 4️⃣ — ФАЙЛ АКТА
 ✅ Завершить акт → пришлю готовый Excel (укр.) — пересылай заказчику сразу.
+
+ШАГ 4½ — СМЕТЫ (/smeta) — план работ ДО ремонта
+🧾 Сметы → новая → вводи строки (или диктуй 🎤) → «📤 Заказчику».
+🏠 Комната — «Кухня 9 м²» вставит весь техцикл сама (потолок = площадь,
+стены = периметр × высота). 📋 Акт из сметы — отметил сделанное → готов Excel.
 
 ШАГ 5️⃣ — ДЕНЬГИ ПРИШЛИ
 💰 Долги → «💵 Оплата · акт №…» → сумма (например 10000). Остаток покажу сам.

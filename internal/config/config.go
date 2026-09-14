@@ -21,6 +21,10 @@ type Config struct {
 	WebappListen  string        // адрес HTTP-сервера Mini App, например ":8443"
 	WebappURL     string        // публичный https-адрес Mini App (кнопка в меню бота)
 	WebappAuthTTL time.Duration // максимум возраста initData (0 — 24 часа)
+
+	// v0.6: интервал фоновой синхронизации прайса с Google Таблицей
+	// (PRICE_SYNC_INTERVAL, формат Go duration; 0 — 6 часов)
+	PriceSyncInterval time.Duration
 }
 
 func getenv(key, def string) string {
@@ -32,6 +36,12 @@ func getenv(key, def string) string {
 
 // Load проверяет обязательные переменные и заполняет дефолты.
 func Load() (*Config, error) {
+	syncInterval := 6 * time.Hour
+	if v := os.Getenv("PRICE_SYNC_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
+			syncInterval = d
+		}
+	}
 	cfg := &Config{
 		BotToken:   os.Getenv("BOT_TOKEN"),
 		DBDSN:      os.Getenv("DB_DSN"),
@@ -45,6 +55,8 @@ func Load() (*Config, error) {
 		WebappListen:  os.Getenv("WEBAPP_LISTEN"),
 		WebappURL:     os.Getenv("WEBAPP_URL"),
 		WebappAuthTTL: 24 * time.Hour,
+
+		PriceSyncInterval: syncInterval,
 	}
 	if cfg.BotToken == "" {
 		return nil, errors.New("BOT_TOKEN не задан")

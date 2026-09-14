@@ -194,3 +194,28 @@ type TemplateLine struct {
 	Price  float64 `json:"price"`
 	Hidden bool    `json:"hidden"`
 }
+
+// EstimateComment — комментарий к смете (v0.6). Автор: "master" (мастер в
+// чате/мини-апп) или "client" (заказчик по публичной ссылке) — так на одной
+// странице появляется диалог «что поменять / почему так дорого» без лички.
+type EstimateComment struct {
+	ID        int64     `json:"id"`
+	EstID     int64     `json:"est_id"`
+	Author    string    `json:"author"` // master | client
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// PriceSource — ссылка на Google Таблицу-источник прайса (v0.6).
+// Синхронизация — через публичный CSV-экспорт (Файл → «Опубликовать в сети»
+// или доступ «Все, у кого есть ссылка — Читатель»); OAuth не нужен,
+// ключей Гугла не используем (ограничение проекта).
+type PriceSource struct {
+	ChatID    int64     `json:"chat_id"`
+	URL       string    `json:"url"`
+	FileID    string    `json:"file_id"` // spreadsheets/d/<fileID>
+	GID       string    `json:"gid"`     // лист (0 по умолчанию)
+	LastSync  time.Time `json:"last_sync"`
+	LastCount int       `json:"last_count"` // позиций записано в последний синк
+	LastError string    `json:"last_error"`
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -41,7 +42,33 @@ type apiResponse struct {
 }
 
 // call — POST JSON-запрос к API.
+// v0.6: на 429 (limits Telegram) — пауза Retry-After и до 3 повторов
+// (правила сдачи: «ретраи при 429 на все новые маршруты»). getUpdates
+// повторяет сам main — тут это не нужно, но безвредно.
 func (c *Client) call(ctx context.Context, client *http.Client, method string, payload any, result any) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		err := c.callOnce(ctx, client, method, payload, result)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		var api *APIError
+		if errors.As(err, &api) && api.RetryAfter > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(api.RetryAfter)*time.Second + 300*time.Millisecond):
+			}
+			continue // повтор после паузы
+		}
+		return err // другая ошибка — наружу
+	}
+	return lastErr
+}
+
+// callOnce — одна попытка вызова (сам call с ретраями).
+func (c *Client) callOnce(ctx context.Context, client *http.Client, method string, payload any, result any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", method, err)
