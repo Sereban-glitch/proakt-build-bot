@@ -36,6 +36,29 @@ func signInitData(t *testing.T, token string, params map[string]string, authDate
 	return strings.Join(parts, "&")
 }
 
+// tgInitDataNoSig — как Telegram ДО 2026: поле signature в данных есть,
+// но подпись посчитана по data_check БЕЗ него (для проверки отказ-пути).
+func tgInitDataNoSig(t *testing.T, token string, params map[string]string, sig string, authDate int64) string {
+	t.Helper()
+	params["auth_date"] = fmt.Sprint(authDate)
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		if k == "signature" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sortStrings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+params[k])
+	}
+	secret := hmacSHA256([]byte("WebAppData"), []byte(token))
+	hash := hex.EncodeToString(hmacSHA256(secret, []byte(strings.Join(parts, "\n"))))
+	out := strings.Join(parts, "&") + "&signature=" + sig + "&hash=" + hash
+	return out
+}
+
 func TestValidateInitData(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	user := `{"id":777,"first_name":"Серёга","username":"master"}`
@@ -80,6 +103,30 @@ func TestValidateInitData(t *testing.T) {
 		u, err := ValidateInitData("tma "+raw, testToken, 24*time.Hour, now)
 		if err != nil || u.ID != 777 {
 			t.Fatalf("схема tma не разобралась: %v", err)
+		}
+	})
+
+	t.Run("2026-формат: hash считается вместе с signature", func(t *testing.T) {
+		// Telegram с 2026 присылает поле "signature" и ВКЛЮЧАЕТ его в расчёт hash
+		// (подтверждено на реальном устройстве, см. commовления auth.go).
+		g2026 := cloneMap(good)
+		g2026["signature"] = "qwerty123"
+		raw := signInitData(t, testToken, g2026, now.Unix())
+		u, err := ValidateInitData(raw, testToken, 24*time.Hour, now)
+		if err != nil {
+			t.Fatalf("подпись 2026-формата обязана пройти: %v", err)
+		}
+		if u.ID != 777 {
+			t.Fatalf("не тот пользователь: %+v", u)
+		}
+	})
+
+	t.Run("signature выкинут из data_check — отказ (несоответствие)", func(t *testing.T) {
+		// Подделка: пришёл signature, но подпись посчитана старым способом без него,
+		// как в каноне до 2026 — такой запрос обязан отклоняться.
+		raw := tgInitDataNoSig(t, testToken, cloneMap(good), "forged-sig", now.Unix())
+		if _, err := ValidateInitData(raw, testToken, 24*time.Hour, now); err == nil {
+			t.Fatal("подпись без учёта signature обязана отклоняться")
 		}
 	})
 }

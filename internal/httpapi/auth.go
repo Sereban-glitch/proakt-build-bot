@@ -45,7 +45,9 @@ var errBadInitData = errors.New("initData: подпись не прошла пр
 // "Validating data received via the Mini App"). Алгоритм:
 //
 //	secret_key   = HMAC_SHA256(key=bot_token,   msg="WebAppData")
-//	data_check   = "k=v\n..." (все поля, отсортированные по ключу, без hash/signature)
+//	data_check   = "k=v\n..." (все поля, отсортированные по ключу, без hash;
+//	                          поле signature — ВКЛЮЧАЕТСЯ в расчёт, так
+//	                          Telegram считает с 2026)
 //	calculated   = HMAC_SHA256(key=secret_key,  msg=data_check) — hex
 //
 // Дополнительно: auth_date не старше ttl (защита от replay), user обязателен.
@@ -65,7 +67,8 @@ func ValidateInitData(raw, botToken string, ttl time.Duration, now time.Time) (T
 		return TMAUser{}, errBadInitData
 	}
 	vals.Del("hash")
-	vals.Del("signature")
+	// ВАЖНО: поле "signature" НЕ удаляем — с 2026-формата Telegram включает
+	// его в data_check при расчёте hash (подтверждено на реальном устройстве).
 
 	keys := make([]string, 0, len(vals))
 	for k := range vals {
