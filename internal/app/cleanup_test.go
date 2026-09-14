@@ -76,12 +76,13 @@ func TestTextsFitTelegram(t *testing.T) {
 func TestWelcomePointsToInstrButton(t *testing.T) {
 	b := &Bot{ai: &ai.Gateway{}}
 	w := b.welcome()
-	for _, want := range []string{"кнопк", "👇", "Что это даёт", "ДИКТОВАТЬ голосом"} {
+	// v0.7: приветствие содержит преимущества и пошаговый план
+	for _, want := range []string{"👇", "ЧЕМ ЭТО ЛУЧШЕ", "голосом", "Пять шагов"} {
 		if !strings.Contains(w, want) {
 			t.Errorf("приветствие без %q:\n%s", want, w)
 		}
 	}
-	// кнопка инструкции — валидный callback
+	// кнопка инструкции по-прежнему валидна (доступна через «Ещё →📖»)
 	kb := InstrButton()
 	if len(kb.InlineKeyboard) != 1 || kb.InlineKeyboard[0][0].CallbackData != "instr" {
 		t.Errorf("кнопка инструкции не собралась: %+v", kb)

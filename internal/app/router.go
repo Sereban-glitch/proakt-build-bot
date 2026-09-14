@@ -139,11 +139,9 @@ func (b *Bot) onMessage(ctx context.Context, m tg.Message) {
 			return
 		}
 		b.reset(ctx, chatID)
-		// v0.3.8: сначала постоянное меню (крупные кнопки внизу), затем
-		// приветствие с inline-кнопкой «📖 Инструкция по шагам» — новичок
-		// в один тап получает весь маршрут: добавить, найти, удалить.
-		b.textKB(ctx, chatID, "Главное меню — кнопки внизу экрана 👇", MainMenu())
-		b.textKB(ctx, chatID, b.welcome(), InstrButton())
+		// v0.7: одно сообщение с преимуществами и пошаговым планом +
+		// постоянное меню внизу — новичок сразу видит и «зачем», и «как».
+		b.textKB(ctx, chatID, b.welcome(), MainMenu())
 		return
 	case text == "/help" || strings.Contains(text, "помощь") || text == BtnInstrMenu ||
 		strings.EqualFold(text, "инструкция"):
