@@ -51,9 +51,9 @@ export function stableHeight() {
 // --- тема ------------------------------------------------------------
 
 const FALLBACK_DARK = {
-  bg_color: '#17212b', text_color: '#f2f5f7', hint_color: '#7c8894',
-  link_color: '#58b0e3', button_color: '#2ecc71', button_text_color: '#06281a',
-  secondary_bg_color: '#0e1621',
+  bg_color: '#0f1822', text_color: '#f7f5f0', hint_color: '#83909d',
+  link_color: '#58b0e3', button_color: '#f6b73c', button_text_color: '#261a02',
+  secondary_bg_color: '#111d29',
 };
 
 /** Текущие themeParams с фолбэком (вне Telegram params пустые). */

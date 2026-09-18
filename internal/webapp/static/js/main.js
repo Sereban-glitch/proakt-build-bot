@@ -29,12 +29,13 @@ const screen = document.createElement('div');
 screen.className = 'screen';
 app.replaceChildren(screen);
 
-const TABS = ['dashboard', 'objects', 'estimates', 'acts', 'price', 'report'];
 let tabBar = null;
 function syncTabBar() {
-  const seg = (location.hash || '#/dashboard').replace(/^#\/?/, '').split('/')[0] || 'dashboard';
-  const active = TABS.includes(seg) ? seg : 'dashboard';
-  const next = TabBar(active, (id) => { location.hash = '#/' + id; });
+  const seg = (location.hash || '#/dashboard')
+    .replace(/^#\/?/, '')
+    .split('?')[0]
+    .split('/')[0] || 'dashboard';
+  const next = TabBar(seg, (id) => { location.hash = '#/' + id; });
   tabBar?.remove();
   tabBar = next;
   document.body.appendChild(next);
