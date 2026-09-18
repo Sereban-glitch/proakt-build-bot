@@ -25,36 +25,30 @@ export function view({ root }) {
   const el = document.createElement('div');
   el.appendChild(Header({ title: 'Сметы', subtitle: 'план работ и деньги до ремонта' }));
 
-  // вход в «админку» шаблонов — техцикл одним тапом (вне скролла,
-  // чтобы replaceChildren при загрузке не стирал кнопку)
+  // Основные действия сразу под заголовком: их не нужно искать в конце списка.
   const tplRow = document.createElement('div');
-  tplRow.style.cssText = 'display:flex;justify-content:flex-end;padding:2px 16px 0;';
+  tplRow.className = 'page-tools-row';
+  const createTop = document.createElement('button');
+  createTop.type = 'button';
+  createTop.className = 'btn btn-primary grow';
+  createTop.appendChild(icon('plus', 18));
+  createTop.appendChild(Object.assign(document.createElement('span'), { textContent: 'Новая смета' }));
+  createTop.addEventListener('click', () => { haptics.medium(); openCreateSheet(); });
   const tplBtn = document.createElement('button');
-  tplBtn.className = 'btn btn-ghost';
-  tplBtn.style.cssText = 'font-size:12.5px;color:var(--info);';
+  tplBtn.type = 'button';
+  tplBtn.className = 'btn btn-secondary btn-sm';
   tplBtn.appendChild(icon('template', 15));
   const tplLbl = document.createElement('span');
-  tplLbl.textContent = 'Шаблоны работ';
+  tplLbl.textContent = 'Шаблоны';
   tplBtn.appendChild(tplLbl);
   tplBtn.addEventListener('click', () => { haptics.tap(); location.hash = '#/templates'; });
-  tplRow.appendChild(tplBtn);
+  tplRow.append(createTop, tplBtn);
   el.appendChild(tplRow);
 
   const content = document.createElement('main');
   content.className = 'view';
   content.appendChild(skeletons(3, 'card-sk'));
   el.appendChild(content);
-
-  // FAB: новая смета
-  const fabWrap = document.createElement('div');
-  fabWrap.className = 'fab-wrap';
-  const fab = document.createElement('button');
-  fab.className = 'fab';
-  fab.setAttribute('aria-label', 'Новая смета');
-  fab.appendChild(icon('plus', 24));
-  fab.addEventListener('click', () => { haptics.medium(); openCreateSheet(content); });
-  fabWrap.appendChild(fab);
-  el.appendChild(fabWrap);
 
   root.appendChild(el);
 
@@ -204,6 +198,11 @@ export function view({ root }) {
       body: [titleF.el, objBox, coeffBox, noteF.el],
       footer: [create],
     });
+  }
+
+  if (new URLSearchParams(location.hash.split('?')[1] || '').get('new') === '1') {
+    history.replaceState(null, '', `${location.pathname}${location.search}#/estimates`);
+    setTimeout(openCreateSheet, 120);
   }
 
   return { el };

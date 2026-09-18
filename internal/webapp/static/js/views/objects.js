@@ -28,12 +28,12 @@ export function view({ root, navigate }) {
     label: 'Новый объект', iconName: 'plus', variant: 'primary', block: true,
     onClick: () => openCreateSheet(),
   });
+  addBtn.el.classList.add('page-primary-action');
+  content.appendChild(addBtn.el);
 
   const listBox = document.createElement('div');
   listBox.style.marginTop = 'var(--gap-m)';
   content.appendChild(listBox);
-  content.appendChild(addBtn.el);
-  addBtn.el.style.marginTop = 'var(--gap-l)';
 
   listBox.replaceChildren(skeletons(4));
 
@@ -107,5 +107,10 @@ export function view({ root, navigate }) {
   // удаление объекта доступно из детального экрана; тут — только список
   api.objects().then((objs) => { items = objs ?? []; paint(); })
     .catch((e) => { listBox.replaceChildren(Empty({ iconName: 'alert', title: 'Не загрузилось', sub: e.message })); });
+
+  if (new URLSearchParams(location.hash.split('?')[1] || '').get('new') === '1') {
+    history.replaceState(null, '', `${location.pathname}${location.search}#/objects`);
+    setTimeout(openCreateSheet, 120);
+  }
   return { el };
 }
