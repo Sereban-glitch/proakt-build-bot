@@ -1,4 +1,4 @@
-// ПрорАКТ («Прораб», @proakt_build_bot) — Telegram-бот строителя-отделочника.
+// ПрорАКТ 360 (@proakt_build_bot) — Telegram-бот строителя-отделочника.
 // v0.1: объекты, акты (текстовый ввод), Excel-файлы, оплаты/долги, фото.
 // v0.2: голосовой ввод позиций через Anthropic-совместимый LLM-шлюз (/v1/messages).
 // v0.2.2: аудио блоком «image»+audio/ogg (обход ограничения конвертера шлюза) — см. internal/ai/gateway.go.
@@ -111,7 +111,7 @@ func main() {
 			}
 		}()
 		if cfg.WebappURL != "" {
-			if err := client.SetChatMenuButton(ctx, "🧰 ПрорАКТ", cfg.WebappURL); err != nil {
+			if err := client.SetChatMenuButton(ctx, "🧰 ПрорАКТ 360", cfg.WebappURL); err != nil {
 				log.Printf("setChatMenuButton: %v", err)
 			} else {
 				log.Printf("webapp: кнопка меню установлена — %s", cfg.WebappURL)

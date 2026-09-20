@@ -8,7 +8,7 @@ import { money, dateShort, dateTime, pluralN } from '../services/format.js';
 import { Card, Cell, Stat, Empty, Button, actBadge, skeletons } from '../components/ui/primitives.js';
 import { Header } from '../components/layout/chrome.js';
 import { toast, confirmSheet } from '../components/ui/feedback.js';
-import { haptics } from '../services/tg.js';
+import { haptics, isDemo } from '../services/tg.js';
 import { icon } from '../components/ui/icon.js';
 
 export function view({ root, params, navigate }) {
@@ -50,6 +50,54 @@ export function view({ root, params, navigate }) {
       hero: false,
     }));
     content.appendChild(grid);
+
+    // Демо будущего разграничения доступа по Telegram user_id.
+    if (isDemo && o.id === 1) {
+      const accessCard = Card({ className: 'section client-access-card' });
+      const accessHead = document.createElement('div');
+      accessHead.className = 'client-access-head';
+      const accessCopy = document.createElement('div');
+      const accessTitle = document.createElement('div');
+      accessTitle.className = 'card-title';
+      accessTitle.textContent = 'Кабинет заказчика';
+      const accessSub = document.createElement('p');
+      accessSub.textContent = 'Заказчик видит только этот объект, фото, акты и согласованные суммы.';
+      accessCopy.append(accessTitle, accessSub);
+      const connected = document.createElement('span');
+      connected.className = 'client-access-status';
+      connected.textContent = 'Подключён';
+      accessHead.append(accessCopy, connected);
+      accessCard.appendChild(accessHead);
+
+      const idRow = document.createElement('div');
+      idRow.className = 'client-access-id';
+      const idLabel = document.createElement('span');
+      idLabel.textContent = 'Telegram ID заказчика';
+      const idValue = document.createElement('strong');
+      idValue.className = 'num';
+      idValue.textContent = '583•••741';
+      idRow.append(idLabel, idValue);
+      accessCard.appendChild(idRow);
+
+      const actions = document.createElement('div');
+      actions.className = 'client-access-actions';
+      const openClient = Button({
+        label: 'Открыть как заказчик', iconName: 'eye', variant: 'primary', block: true,
+        onClick: () => { location.href = 'client.html'; },
+      });
+      const copyClient = Button({
+        label: 'Скопировать ссылку', iconName: 'share', variant: 'secondary', block: true,
+        onClick: async () => {
+          const url = new URL('client.html', location.href).href.split('#')[0];
+          try { await navigator.clipboard.writeText(url); } catch { /* старый WebView */ }
+          haptics.success();
+          toast('Ссылка на кабинет скопирована', { icon: '🔗' });
+        },
+      });
+      actions.append(openClient.el, copyClient.el);
+      accessCard.appendChild(actions);
+      content.appendChild(accessCard);
+    }
 
     // акты объекта
     const actsCard = Card({ className: 'section' });

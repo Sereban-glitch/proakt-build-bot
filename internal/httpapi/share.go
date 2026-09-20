@@ -164,7 +164,7 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--hint
 
   <div class="print-link"><a href="print">🖨 Печать / сохранить в PDF</a></div>
 
-  <div class="foot">Смета сформирована приложением «ПрорАКТ» · мастер ведёт учёт работ и денег<br>
+  <div class="foot">Смета сформирована приложением «ПрорАКТ 360» · мастер ведёт учёт работ и денег<br>
   Суммы указаны с учётом сложности работ. Вопросы — пишите мастеру в Telegram.</div>
 </div>
 <div id="lb" onclick="this.style.display='none'"><img id="lbimg" alt=""></div>

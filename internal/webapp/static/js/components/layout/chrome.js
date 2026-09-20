@@ -42,7 +42,10 @@ export function BrandHeader() {
   const mark = document.createElement('div');
   mark.className = 'brand-mark';
   mark.setAttribute('aria-hidden', 'true');
-  mark.textContent = 'П';
+  const markImage = document.createElement('img');
+  markImage.src = 'assets/proakt360-avatar.webp';
+  markImage.alt = '';
+  mark.appendChild(markImage);
 
   const copy = document.createElement('div');
   copy.className = 'grow';
@@ -51,7 +54,7 @@ export function BrandHeader() {
   eyebrow.textContent = 'ЦИФРОВОЙ ПРОРАБ';
   const title = document.createElement('div');
   title.className = 'brand-title';
-  title.textContent = 'ПрорАКТ';
+  title.textContent = 'ПрорАКТ 360';
   const sub = document.createElement('div');
   sub.className = 'brand-subtitle';
   sub.textContent = 'Сметы, объекты и оплаты';
