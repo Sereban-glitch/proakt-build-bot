@@ -76,6 +76,13 @@ type Service interface {
 	MarkPriceSynced(ctx context.Context, chatID int64, count int, syncErr string) error
 	ApproveEstimateByToken(ctx context.Context, token string) (chatID, estID int64, title string, err error)
 	ShareChatID(ctx context.Context, token string) (chatID, estID int64, title string, err error)
+
+	// --- 360: кабинет заказчика ---
+	GrantClient(ctx context.Context, objectID, tgUserID int64) error
+	RevokeClient(ctx context.Context, objectID, tgUserID int64) error
+	CanClientSee(ctx context.Context, tgUserID, objectID int64) (bool, error)
+	ClientObjects(ctx context.Context, tgUserID int64) ([]domain.ObjectBrief, error)
+	ClientList(ctx context.Context, objectID int64) ([]int64, error)
 }
 
 // Config — параметры HTTP-сервера.

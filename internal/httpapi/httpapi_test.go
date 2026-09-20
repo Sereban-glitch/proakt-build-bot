@@ -126,6 +126,8 @@ type fakeSvc struct {
 	linePhotos []string
 	comments   map[int64][]domain.EstimateComment
 	shareToken string
+
+	clientAllow map[int64][]int64 // tg_user_id -> object_id
 }
 
 func (f *fakeSvc) ListObjects(_ context.Context, chatID int64) ([]domain.ObjectBrief, error) {
@@ -323,6 +325,48 @@ func (f *fakeSvc) ShareChatID(_ context.Context, token string) (int64, int64, st
 		return 0, 0, "", store.ErrNotFound
 	}
 	return f.chat, 1, "смета-1", nil
+}
+
+func (f *fakeSvc) GrantClient(_ context.Context, oid, tg int64) error {
+	if f.clientAllow == nil {
+		f.clientAllow = map[int64][]int64{}
+	}
+	f.clientAllow[tg] = append(f.clientAllow[tg], oid)
+	return nil
+}
+func (f *fakeSvc) RevokeClient(_ context.Context, oid, tg int64) error {
+	keep := f.clientAllow[tg][:0]
+	for _, v := range f.clientAllow[tg] {
+		if v != oid {
+			keep = append(keep, v)
+		}
+	}
+	f.clientAllow[tg] = keep
+	return nil
+}
+func (f *fakeSvc) CanClientSee(_ context.Context, tg, oid int64) (bool, error) {
+	return containsID(f.clientAllow[tg], oid), nil
+}
+func (f *fakeSvc) ClientObjects(_ context.Context, tg int64) ([]domain.ObjectBrief, error) {
+	var out []domain.ObjectBrief
+	for _, o := range f.objs {
+		if containsID(f.clientAllow[tg], o.ID) {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+func (f *fakeSvc) ClientList(_ context.Context, oid int64) ([]int64, error) {
+	var out []int64
+	for tg, ids := range f.clientAllow {
+		if containsID(ids, oid) {
+			out = append(out, tg)
+		}
+	}
+	if out == nil {
+		out = []int64{}
+	}
+	return out, nil
 }
 
 func containsID(ids []int64, id int64) bool {

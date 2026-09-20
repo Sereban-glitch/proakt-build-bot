@@ -17,6 +17,7 @@ import (
 
 // routes — таблица маршрутов (Go 1.22 pattern routing).
 func routes(mux *http.ServeMux, s *Server) {
+	clientRoutes(mux, s)
 	a := s.auth
 	mux.HandleFunc("GET /api/dashboard", a(s.handleDashboard))
 	mux.HandleFunc("GET /api/objects", a(s.handleObjectsList))

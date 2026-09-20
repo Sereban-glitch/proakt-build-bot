@@ -145,6 +145,14 @@ CREATE TABLE IF NOT EXISTS price_sources (
   last_count INT NOT NULL DEFAULT 0,
   last_error TEXT NOT NULL DEFAULT ''
 );
+-- 360: доступ заказчика (object_id + telegram_user_id).
+CREATE TABLE IF NOT EXISTS client_access (
+  object_id  BIGINT NOT NULL REFERENCES objects(id) ON DELETE CASCADE,
+  tg_user_id BIGINT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (object_id, tg_user_id)
+);
 `
 
 type Store struct{ pool *pgxpool.Pool }
