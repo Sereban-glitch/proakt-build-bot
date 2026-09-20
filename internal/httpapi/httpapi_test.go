@@ -126,6 +126,9 @@ type fakeSvc struct {
 	linePhotos []string
 	comments   map[int64][]domain.EstimateComment
 	shareToken string
+
+	clientAllow  map[int64][]int64 // tg_user_id -> object_id
+	clientPhotos []domain.PhotoRec
 }
 
 func (f *fakeSvc) ListObjects(_ context.Context, chatID int64) ([]domain.ObjectBrief, error) {
@@ -324,6 +327,73 @@ func (f *fakeSvc) ShareChatID(_ context.Context, token string) (int64, int64, st
 	}
 	return f.chat, 1, "смета-1", nil
 }
+
+func (f *fakeSvc) GrantClient(_ context.Context, oid, tg int64) error {
+	if f.clientAllow == nil {
+		f.clientAllow = map[int64][]int64{}
+	}
+	f.clientAllow[tg] = append(f.clientAllow[tg], oid)
+	return nil
+}
+func (f *fakeSvc) RevokeClient(_ context.Context, oid, tg int64) error {
+	keep := f.clientAllow[tg][:0]
+	for _, v := range f.clientAllow[tg] {
+		if v != oid {
+			keep = append(keep, v)
+		}
+	}
+	f.clientAllow[tg] = keep
+	return nil
+}
+func (f *fakeSvc) CanClientSee(_ context.Context, tg, oid int64) (bool, error) {
+	return containsID(f.clientAllow[tg], oid), nil
+}
+func (f *fakeSvc) ClientObjects(_ context.Context, tg int64) ([]domain.ObjectBrief, error) {
+	var out []domain.ObjectBrief
+	for _, o := range f.objs {
+		if containsID(f.clientAllow[tg], o.ID) {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+func (f *fakeSvc) ClientList(_ context.Context, oid int64) ([]store.ClientGrant, error) {
+	var out []store.ClientGrant
+	for tg, ids := range f.clientAllow {
+		if containsID(ids, oid) {
+			out = append(out, store.ClientGrant{UserID: tg, ShowFinance: true})
+		}
+	}
+	if out == nil {
+		out = []store.ClientGrant{}
+	}
+	return out, nil
+}
+func (f *fakeSvc) ClientPhoto(_ context.Context, tg, pid int64) (domain.PhotoRec, error) {
+	for _, p := range f.clientPhotos {
+		if p.ID == pid && containsID(f.clientAllow[tg], p.ObjectID) {
+			return p, nil
+		}
+	}
+	return domain.PhotoRec{}, store.ErrNotFound
+}
+func (f *fakeSvc) SetClientFinance(_ context.Context, _, _ int64, _ bool) error { return nil }
+func (f *fakeSvc) ClientFinanceVisible(_ context.Context, _, _ int64) (bool, error) {
+	return true, nil
+}
+func (f *fakeSvc) DeleteObject(_ context.Context, chatID, objID int64) (string, error) {
+	for i, o := range f.objs {
+		if o.ID == objID && o.ChatID == chatID {
+			f.objs = append(f.objs[:i], f.objs[i+1:]...)
+			return o.Name, nil
+		}
+	}
+	return "", store.ErrNotFound
+}
+func (f *fakeSvc) DeleteStarterData(_ context.Context, _ int64) (store.StarterReport, error) {
+	return store.StarterReport{}, nil
+}
+func (f *fakeSvc) StarterHasData(_ context.Context, _ int64) (bool, error) { return false, nil }
 
 func containsID(ids []int64, id int64) bool {
 	for _, v := range ids {

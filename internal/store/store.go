@@ -145,6 +145,26 @@ CREATE TABLE IF NOT EXISTS price_sources (
   last_count INT NOT NULL DEFAULT 0,
   last_error TEXT NOT NULL DEFAULT ''
 );
+-- 360: доступ заказчика (object_id + telegram_user_id).
+CREATE TABLE IF NOT EXISTS client_access (
+  object_id  BIGINT NOT NULL REFERENCES objects(id) ON DELETE CASCADE,
+  tg_user_id BIGINT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (object_id, tg_user_id)
+);
+ALTER TABLE client_access ADD COLUMN IF NOT EXISTS show_finance BOOLEAN NOT NULL DEFAULT TRUE;
+-- 360: метки стартовых примеров (кнопка «Удалить стартовые примеры»).
+CREATE TABLE IF NOT EXISTS seed_objects (
+  object_id  BIGINT PRIMARY KEY REFERENCES objects(id) ON DELETE CASCADE,
+  chat_id    BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS seed_catalog (
+  chat_id BIGINT NOT NULL,
+  name    TEXT NOT NULL,
+  PRIMARY KEY (chat_id, name)
+);
 `
 
 type Store struct{ pool *pgxpool.Pool }

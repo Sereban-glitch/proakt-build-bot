@@ -48,6 +48,11 @@ const live = {
   objects: () => request('/objects'),
   createObject: (name, customer) => request('/objects', { method: 'POST', body: { name, customer } }),
   archiveObject: (id) => request(`/objects/${id}/archive`, { method: 'POST' }),
+  deleteObject: (id) => request(`/objects/${id}`, { method: 'DELETE' }),
+
+  // --- 360: стартовые примеры ---
+  starterStatus: () => request('/starter/status'),
+  starterDelete: () => request('/starter/delete', { method: 'POST', body: {} }),
 
   acts: () => request('/acts?limit=100'),
   act: (id) => request(`/acts/${id}`),
@@ -113,6 +118,20 @@ const live = {
   /** Google Таблица: состояние и синк */
   priceSource: () => request('/price/source'),
   priceSync: () => request('/price/sync', { method: 'POST', body: {} }),
+
+  // --- 360: кабинет заказчика (read-only) ---
+  clientOverview: (objectId) => request(`/client/overview?object_id=${objectId}`),
+  clientWork: (objectId) => request(`/client/work?object_id=${objectId}`),
+  clientFinance: (objectId) => request(`/client/finance?object_id=${objectId}`),
+  clientDocs: (objectId) => request(`/client/docs?object_id=${objectId}`),
+  // --- 360: привязка заказчика (админка) ---
+  clientsList: (objectId) => request(`/clients?object_id=${objectId}`),
+  clientGrant: (objectId, tgUserId) =>
+    request('/clients/grant', { method: 'POST', body: { object_id: objectId, tg_user_id: tgUserId } }),
+  clientRevoke: (objectId, tgUserId) =>
+    request('/clients/revoke', { method: 'POST', body: { object_id: objectId, tg_user_id: tgUserId } }),
+  clientFinanceFlag: (objectId, tgUserId, show) =>
+    request('/clients/finance', { method: 'POST', body: { object_id: objectId, tg_user_id: tgUserId, show } }),
 };
 
 /** Публичный API: demo → mock, иначе → живой бэкенд. */

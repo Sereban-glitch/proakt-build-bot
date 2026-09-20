@@ -8,7 +8,7 @@ import { money, dateShort, dateTime, pluralN } from '../services/format.js';
 import { Card, Cell, Stat, Empty, Button, actBadge, skeletons } from '../components/ui/primitives.js';
 import { Header } from '../components/layout/chrome.js';
 import { toast, confirmSheet } from '../components/ui/feedback.js';
-import { haptics } from '../services/tg.js';
+import { haptics, isDemo } from '../services/tg.js';
 import { icon } from '../components/ui/icon.js';
 
 export function view({ root, params, navigate }) {
@@ -50,6 +50,122 @@ export function view({ root, params, navigate }) {
       hero: false,
     }));
     content.appendChild(grid);
+
+    // Кабинет заказчика: демо — маска, живьём — форма привязки Telegram ID.
+    if (!isDemo || o.id === 1) {
+      const accessCard = Card({ className: 'section client-access-card' });
+      const accessHead = document.createElement('div');
+      accessHead.className = 'client-access-head';
+      const accessCopy = document.createElement('div');
+      const accessTitle = document.createElement('div');
+      accessTitle.className = 'card-title';
+      accessTitle.textContent = 'Кабинет заказчика';
+      const accessSub = document.createElement('p');
+      accessSub.textContent = 'Заказчик видит только этот объект, фото, акты и согласованные суммы.';
+      accessCopy.append(accessTitle, accessSub);
+      const connected = document.createElement('span');
+      connected.className = 'client-access-status';
+      connected.textContent = isDemo ? 'Подключён' : 'Доступ по ID';
+      accessHead.append(accessCopy, connected);
+      accessCard.appendChild(accessHead);
+
+      if (isDemo) {
+        const idRow = document.createElement('div');
+        idRow.className = 'client-access-id';
+        const idLabel = document.createElement('span');
+        idLabel.textContent = 'Telegram ID заказчика';
+        const idValue = document.createElement('strong');
+        idValue.className = 'num';
+        idValue.textContent = '583•••741';
+        idRow.append(idLabel, idValue);
+        accessCard.appendChild(idRow);
+      } else {
+        const form = document.createElement('div');
+        form.className = 'client-access-form';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.placeholder = 'Telegram ID заказчика';
+        input.setAttribute('aria-label', 'Telegram ID заказчика');
+        const bindBtn = Button({
+          label: 'Привязать', iconName: 'check', variant: 'primary', block: true,
+          onClick: async () => {
+            const v = Number(String(input.value).replace(/\D/g, ''));
+            if (!v) { toast('Введи числовой Telegram ID', { icon: '⚠️' }); return; }
+            try {
+              await api.clientGrant(o.id, v);
+              haptics.success();
+              toast('Заказчик привязан', { icon: '✅' });
+            } catch (e) { toast(e?.message || 'Не привязалось', { icon: '⚠️' }); }
+          },
+        });
+        const unbindBtn = Button({
+          label: 'Отключить', iconName: 'close', variant: 'secondary', block: true,
+          onClick: async () => {
+            const v = Number(String(input.value).replace(/\D/g, ''));
+            if (!v) { toast('Введи ID для отключения', { icon: '⚠️' }); return; }
+            if (!await confirmSheet({ title: 'Отключить доступ?', text: 'Заказчик перестанет видеть объект.', confirmLabel: 'Отключить' })) return;
+            try {
+              await api.clientRevoke(o.id, v);
+              haptics.success();
+              toast('Доступ отключён', { icon: '🔒' });
+            } catch (e) { toast(e?.message || 'Не отключилось', { icon: '⚠️' }); }
+          },
+        });
+        form.append(input, bindBtn.el, unbindBtn.el);
+        accessCard.appendChild(form);
+        const grantsBox = document.createElement('div');
+        grantsBox.className = 'client-grants';
+        accessCard.appendChild(grantsBox);
+        api.clientsList && api.clientsList(o.id).then((g) => {
+          const list = g?.clients ?? [];
+          if (!list.length) {
+            grantsBox.textContent = 'Заказчик пока не привязан.';
+            return;
+          }
+          for (const c of list) {
+            const row = document.createElement('div');
+            row.className = 'client-grant-row';
+            const who = document.createElement('span');
+            who.className = 'num';
+            who.textContent = `ID ${c.UserID ?? c.user_id ?? c.tg_user_id}`;
+            const fin = c.ShowFinance ?? c.show_finance ?? true;
+            const tgl = Button({
+              label: fin ? 'Финансы: видны' : 'Финансы: скрыты',
+              iconName: 'wallet', variant: 'secondary', block: false,
+              onClick: async () => {
+                try {
+                  await api.clientFinanceFlag(o.id, c.UserID ?? c.user_id ?? c.tg_user_id, !fin);
+                  haptics.success();
+                  toast(!fin ? 'Финансы открыты заказчику' : 'Финансы скрыты от заказчика', { icon: '💰' });
+                } catch (e) { toast(e?.message || 'Не переключилось', { icon: '⚠️' }); }
+              },
+            });
+            row.append(who, tgl.el);
+            grantsBox.appendChild(row);
+          }
+        }).catch(() => {});
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'client-access-actions';
+      const openClient = Button({
+        label: 'Открыть как заказчик', iconName: 'eye', variant: 'primary', block: true,
+        onClick: () => { location.href = `client.html?object_id=${o.id}#overview`; },
+      });
+      const copyClient = Button({
+        label: 'Скопировать ссылку', iconName: 'share', variant: 'secondary', block: true,
+        onClick: async () => {
+          const url = new URL(`client.html?object_id=${o.id}#overview`, location.href).href;
+          try { await navigator.clipboard.writeText(url); } catch { /* старый WebView */ }
+          haptics.success();
+          toast('Ссылка на кабинет скопирована', { icon: '🔗' });
+        },
+      });
+      actions.append(openClient.el, copyClient.el);
+      accessCard.appendChild(actions);
+      content.appendChild(accessCard);
+    }
 
     // акты объекта
     const actsCard = Card({ className: 'section' });
@@ -165,6 +281,29 @@ export function view({ root, params, navigate }) {
     const wrapBtn = document.createElement('div');
     wrapBtn.className = 'section';
     wrapBtn.appendChild(archiveBtn.el);
+    if (!isDemo && typeof api.deleteObject === 'function') {
+    const deleteBtn = Button({
+      label: 'Удалить объект навсегда', iconName: 'trash', variant: 'danger', block: true,
+      onClick: async () => {
+        const ok = await confirmSheet({
+          title: 'Удалить навсегда?',
+          text: `«${o.name}» уйдёт вместе с актами, сметами, оплатами и фото. Это необратимо.`,
+          confirmLabel: 'Удалить навсегда',
+          icon: '🗑',
+        });
+        if (!ok) return;
+        try {
+          await api.deleteObject(o.id);
+          haptics.success();
+          toast('Объект удалён', { icon: '🗑' });
+          navigate('#/objects');
+        } catch (err) {
+          toast(err.message, { tone: 'danger' });
+        }
+      },
+    });
+    wrapBtn.appendChild(deleteBtn.el);
+    }
     content.appendChild(wrapBtn);
   }).catch((e) => {
     content.replaceChildren();

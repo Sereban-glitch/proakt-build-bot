@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"mime"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -17,11 +14,13 @@ import (
 
 // routes — таблица маршрутов (Go 1.22 pattern routing).
 func routes(mux *http.ServeMux, s *Server) {
+	clientRoutes(mux, s)
 	a := s.auth
 	mux.HandleFunc("GET /api/dashboard", a(s.handleDashboard))
 	mux.HandleFunc("GET /api/objects", a(s.handleObjectsList))
 	mux.HandleFunc("POST /api/objects", a(s.handleObjectCreate))
 	mux.HandleFunc("POST /api/objects/{id}/archive", a(s.handleObjectArchive))
+	mux.HandleFunc("DELETE /api/objects/{id}", a(s.handleObjectDelete))
 	mux.HandleFunc("GET /api/acts", a(s.handleActsList))
 	mux.HandleFunc("GET /api/acts/{id}", a(s.handleActGet))
 	mux.HandleFunc("DELETE /api/acts/{id}", a(s.handleActDelete))
@@ -166,6 +165,20 @@ func (s *Server) handleObjectArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"archived": true, "name": name})
+}
+
+func (s *Server) handleObjectDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "Некорректный id объекта")
+		return
+	}
+	name, err := s.svc.DeleteObject(r.Context(), chatOf(r), id)
+	if err != nil {
+		apiErr(w, err, "объект")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "name": name})
 }
 
 // --- акты --------------------------------------------------------------------
@@ -421,35 +434,7 @@ func (s *Server) handlePhotoFile(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, err, "фото")
 		return
 	}
-	if p.FilePath == "" {
-		writeErr(w, http.StatusNotFound, "Файл не сохранён на диске — фото живёт в Telegram (бот пришлёт по кнопке)")
-		return
-	}
-	// защита от path traversal: путь обязан лежать внутри FILES_DIR
-	root, _ := filepath.Abs(s.cfg.FilesDir)
-	full, err := filepath.Abs(p.FilePath)
-	if err != nil || !strings.HasPrefix(full, root+string(os.PathSeparator)) {
-		writeErr(w, http.StatusNotFound, "файл недоступен")
-		return
-	}
-	f, err := os.Open(full)
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "файл недоступен")
-		return
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || st.IsDir() {
-		writeErr(w, http.StatusNotFound, "файл недоступен")
-		return
-	}
-	ct := mime.TypeByExtension(strings.ToLower(filepath.Ext(full)))
-	if ct == "" {
-		ct = "image/jpeg"
-	}
-	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Cache-Control", "private, max-age=86400")
-	http.ServeContent(w, r, filepath.Base(full), st.ModTime(), f)
+	servePhotoFile(s, w, r, p.FilePath)
 }
 
 func (s *Server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {

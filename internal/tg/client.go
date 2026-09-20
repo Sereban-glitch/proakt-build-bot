@@ -101,7 +101,7 @@ func (c *Client) callOnce(ctx context.Context, client *http.Client, method strin
 	return nil
 }
 
-// SetChatMenuButton — кнопка «🧰 ПрорАКТ» слева от поля ввода (v0.4):
+// SetChatMenuButton — кнопка «🧰 ПрорАКТ 360» слева от поля ввода (v0.4):
 // открывает Mini App. url пустой — вернуть обычное меню команд.
 func (c *Client) SetChatMenuButton(ctx context.Context, text, url string) error {
 	payload := map[string]any{}

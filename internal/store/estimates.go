@@ -231,8 +231,8 @@ func (s *Store) AddEstimateLinesBulk(ctx context.Context, chatID, estID int64, l
 	}
 	for i, l := range lines {
 		if _, err := tx.Exec(ctx, `
-INSERT INTO estimate_lines(est_id, pos, name, qty, unit, price, sum, hidden, note)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, estID, base+i+1, l.Name, l.Qty, l.Unit, l.Price, l.Qty*l.Price, l.Hidden, l.Note); err != nil {
+INSERT INTO estimate_lines(est_id, pos, name, qty, unit, price, sum, hidden, done, note)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, estID, base+i+1, l.Name, l.Qty, l.Unit, l.Price, l.Qty*l.Price, l.Hidden, l.Done, l.Note); err != nil {
 			return 0, err
 		}
 	}

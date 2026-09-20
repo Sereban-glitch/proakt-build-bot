@@ -1,4 +1,4 @@
-// ПрорАКТ («Прораб», @proakt_build_bot) — Telegram-бот строителя-отделочника.
+// ПрорАКТ 360 (@proakt_build_bot) — Telegram-бот строителя-отделочника.
 // v0.1: объекты, акты (текстовый ввод), Excel-файлы, оплаты/долги, фото.
 // v0.2: голосовой ввод позиций через Anthropic-совместимый LLM-шлюз (/v1/messages).
 // v0.2.2: аудио блоком «image»+audio/ogg (обход ограничения конвертера шлюза) — см. internal/ai/gateway.go.
@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -93,6 +94,11 @@ func main() {
 		log.Printf("ai: AI_GATEWAY_URL не задан — голос выключен, ввод текстом")
 	}
 
+	// NOPOLL=1 — режим staging-пилота: только Mini App + API, без long polling
+	// (иначе второй процесс на том же токене отбирал бы обновления у прод-бота).
+	// Кнопку меню тоже не трогаем — прод-бот продолжает вести на свой URL.
+	nopoll := os.Getenv("NOPOLL") == "1"
+
 	// Mini App (v0.4): если задан WEBAPP_LISTEN — поднимаем HTTP-сервер
 	// с API и встроенным веб-приложением. Не задан — всё как раньше (0 портов).
 	if cfg.WebappListen != "" {
@@ -110,15 +116,22 @@ func main() {
 				log.Printf("webapp: %v", err)
 			}
 		}()
-		if cfg.WebappURL != "" {
-			if err := client.SetChatMenuButton(ctx, "🧰 ПрорАКТ", cfg.WebappURL); err != nil {
+		if cfg.WebappURL != "" && !nopoll {
+			if err := client.SetChatMenuButton(ctx, "🧰 ПрорАКТ 360", cfg.WebappURL); err != nil {
 				log.Printf("setChatMenuButton: %v", err)
 			} else {
 				log.Printf("webapp: кнопка меню установлена — %s", cfg.WebappURL)
 			}
 		} else {
-			log.Printf("webapp: WEBAPP_URL не задан — кнопка в меню бота не обновлена")
+			log.Printf("webapp: WEBAPP_URL не задан или NOPOLL — кнопка в меню бота не обновлена")
 		}
+	}
+
+	if nopoll {
+		log.Printf("NOPOLL=1: polling выключен, только Mini App — жду сигнал остановки")
+		<-ctx.Done()
+		log.Printf("остановка по сигналу")
+		return
 	}
 
 	offset := int64(0)

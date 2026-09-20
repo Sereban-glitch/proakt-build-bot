@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0f1822">
+  <meta name="referrer" content="no-referrer">
+  <title>ПрорАКТ 360 — мой объект</title>
+  <script src="https://telegram.org/js/telegram-web-app.js" onerror="window.__tgFailed=true"></script>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/client.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23f6b73c'/%3E%3Cpath d='M24 48 50 27l26 21v29H57V58H43v19H24Z' fill='%23261a02'/%3E%3C/svg%3E">
+</head>
+<body class="client-body">
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
+    <symbol id="i-work" viewBox="0 0 24 24"><path d="M9 5h6M9 3h6a1 1 0 0 1 1 1v3H8V4a1 1 0 0 1 1-1Z"/><path d="M6 6h12a2 2 0 0 1 2 2v12H4V8a2 2 0 0 1 2-2Z"/><path d="m8 13 2.2 2.2L16 10"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H19v16H6.5A2.5 2.5 0 0 1 4 17.5Z"/><path d="M4 7h15M15 11h6v5h-6a2.5 2.5 0 0 1 0-5Z"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 7h4l1.5-2h5L16 7h4v12H4Z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4Z"/><path d="M8 9h8M8 13h5"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14"/></symbol>
+  </svg>
+
+  <div id="demo-switch" class="client-demo-switch">
+    <span>Работы из файлов Виталия · оплаты — демо</span>
+    <a href="./index.html">Открыть админку</a>
+  </div>
+
+  <div class="client-shell">
+    <header class="client-header">
+      <div class="client-brand" aria-hidden="true"><img src="assets/proakt360-avatar.webp" alt=""></div>
+      <div class="client-header-copy">
+        <div class="client-header-label">ПРОРАКТ 360 · МОЙ ОБЪЕКТ</div>
+        <div class="client-header-title">Парковый 2</div>
+        <div class="client-header-sub">Квартира · адрес скрыт в демо</div>
+      </div>
+      <div class="client-avatar" aria-label="Заказчик">З</div>
+    </header>
+
+    <main class="client-main" id="client-main">
+      <section class="client-screen active" data-screen="overview" aria-labelledby="overview-title">
+        <div class="object-intro">
+          <div>
+            <div class="eyebrow">ФИНИШНЫЙ ЭТАП</div>
+            <h1 id="overview-title">Объект готов на 91%</h1>
+          </div>
+          <span class="status-pill"><span></span>По плану</span>
+        </div>
+
+        <article class="progress-card">
+          <div class="progress-ring" style="--value:91" aria-label="Готовность объекта 91 процент">
+            <div><strong>91%</strong><span>готово</span></div>
+          </div>
+          <div class="progress-copy">
+            <div class="progress-label">Сейчас выполняется</div>
+            <h2>Финишная покраска</h2>
+            <p>Подготовка принята. Стены и потолок окрашиваются по участкам.</p>
+          </div>
+        </article>
+
+        <div class="fact-grid" aria-label="Сроки объекта">
+          <div class="fact"><span>Плановая сдача</span><strong>30 сентября</strong></div>
+          <div class="fact"><span>Принято работ</span><strong>549 526 ₴</strong></div>
+        </div>
+
+        <div class="section-heading">
+          <div><span>Фото скрытого этапа</span><h2>Грунтовка перед шпаклёвкой</h2></div>
+          <span class="hidden-badge"><svg><use href="#i-lock"/></svg>Скрытая работа</span>
+        </div>
+
+        <article class="report-card" data-open-report tabindex="0" role="button" aria-label="Открыть фотоотчёт о грунтовании стен">
+          <div class="report-photo-strip" aria-hidden="true">
+            <div class="report-photo before"><span>До</span></div>
+            <div class="report-photo process"><span>Процесс</span></div>
+            <div class="report-photo after"><span>Готово</span></div>
+          </div>
+          <div class="report-body">
+            <div class="report-meta"><span>16 сентября</span><span>3 этапа</span><span class="done-label"><svg><use href="#i-check"/></svg>Принято</span></div>
+            <p>146,4 м² стен очищены и обработаны грунтовкой перед шпаклеванием.</p>
+            <div class="why-box">
+              <strong>Почему это важно</strong>
+              <span>Грунт связывает пыль, выравнивает впитывание и помогает шпаклёвке надёжно держаться.</span>
+            </div>
+            <button class="text-button" type="button">Посмотреть фотоотчёт <svg><use href="#i-chevron"/></svg></button>
+          </div>
+        </article>
+
+        <article class="next-card">
+          <div class="next-number">14</div>
+          <div class="next-copy"><span>Следующий шаг</span><strong>Приёмка и устранение замечаний</strong><small>После высыхания финишного слоя</small></div>
+          <svg class="chevron"><use href="#i-chevron"/></svg>
+        </article>
+
+        <button class="client-question" type="button" data-action="question">
+          <svg><use href="#i-message"/></svg>
+          <span><strong>Есть вопрос по ремонту?</strong><small>Написать Виталию</small></span>
+          <svg class="chevron"><use href="#i-chevron"/></svg>
+        </button>
+      </section>
+
+      <section class="client-screen" data-screen="work" aria-labelledby="work-title">
+        <div class="screen-title">
+          <div class="eyebrow">ХРОНОЛОГИЯ</div>
+          <h1 id="work-title">Ход работ</h1>
+          <p>Все этапы, включая работы, которые не будут видны после отделки.</p>
+        </div>
+
+        <div class="timeline">
+          <article class="timeline-item done">
+            <div class="timeline-mark"><svg><use href="#i-check"/></svg></div>
+            <div class="timeline-card">
+              <div class="timeline-top"><span>Этап 1</span><time>Акты 1–2</time></div>
+              <h2>Защита и подготовка основания</h2>
+              <p>Укрывка, штробы, шлифовка штукатурки и подготовка скрытых дверей.</p>
+              <button type="button" data-action="photos">Фото подготовки <svg><use href="#i-chevron"/></svg></button>
+            </div>
+          </article>
+
+          <article class="timeline-item done">
+            <div class="timeline-mark"><svg><use href="#i-check"/></svg></div>
+            <div class="timeline-card">
+              <div class="timeline-top"><span>Этап 2</span><time>Акты 3–6</time></div>
+              <div class="timeline-title-row"><h2>Армирование и стеклохолст</h2><span class="mini-hidden"><svg><use href="#i-lock"/></svg>Скрытая</span></div>
+              <p>Сетка, стыки гипсокартона, углы Straight Flex и стеклохолст.</p>
+              <button type="button" data-action="photos">Фото до закрытия <svg><use href="#i-chevron"/></svg></button>
+            </div>
+          </article>
+
+          <article class="timeline-item done">
+            <div class="timeline-mark">3</div>
+            <div class="timeline-card current-card">
+              <div class="timeline-top"><span>Этап 3 · завершён</span><time>Акты 7–11</time></div>
+              <h2>Шпаклёвка и шлифовка</h2>
+              <div class="stage-progress"><i style="width:100%"></i></div>
+              <div class="task-list">
+                <button class="task done hidden-task" type="button" data-open-report><svg><use href="#i-check"/></svg><span>Грунтование 146,4 м²</span><small>Отчёт</small></button>
+                <div class="task done"><svg><use href="#i-check"/></svg><span>Шпаклёвка под стеклохолст</span></div>
+                <div class="task done"><svg><use href="#i-check"/></svg><span>Финишная шпаклёвка</span></div>
+                <div class="task done"><svg><use href="#i-check"/></svg><span>Шлифовка под покраску</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="timeline-item current">
+            <div class="timeline-mark">4</div>
+            <div class="timeline-card current-card">
+              <div class="timeline-top"><span>Этап 4 · сейчас</span><time>Акт 12</time></div>
+              <h2>Финишная покраска</h2>
+              <div class="stage-progress"><i style="width:72%"></i></div>
+              <p>Стены валиком, потолок и откосы — безвоздушным методом.</p>
+            </div>
+          </article>
+
+          <article class="timeline-item future">
+            <div class="timeline-mark">5</div>
+            <div class="timeline-card">
+              <div class="timeline-top"><span>Этап 5</span><time>до 30 сентября</time></div>
+              <h2>Приёмка объекта</h2>
+              <p>Финальная проверка, уборка и передача документов.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="client-screen" data-screen="finance" aria-labelledby="finance-title">
+        <div class="screen-title">
+          <div class="eyebrow">РАСЧЁТЫ</div>
+          <h1 id="finance-title">Финансы</h1>
+          <p>Только согласованные суммы, оплаты и принятые работы.</p>
+        </div>
+
+        <article class="money-hero">
+          <span>Принято работ по 12 актам</span>
+          <strong>549 526 ₴</strong>
+          <div class="money-progress"><i style="width:91.9%"></i></div>
+          <div class="money-legend"><span>Оплачено <b>505 000 ₴</b></span><span>К оплате <b>44 526 ₴</b></span></div>
+        </article>
+
+        <div class="money-grid">
+          <article><span>Актов сформировано</span><strong>12</strong><small>Суммы из архива Виталия</small></article>
+          <article class="debt-card"><span>Задолженность</span><strong>44 526 ₴</strong><small>Условно для демо</small></article>
+        </div>
+
+        <div class="section-heading simple"><div><span>История</span><h2>Платежи и акты</h2></div></div>
+        <div class="finance-list">
+          <button type="button" data-action="document"><span class="finance-icon act">✓</span><span><strong>Акт выполненных работ №12</strong><small>Последний · частично оплачен</small></span><b>64 309 ₴</b><svg><use href="#i-chevron"/></svg></button>
+          <button type="button" data-action="document"><span class="finance-icon income">₴</span><span><strong>Оплата по акту №12</strong><small>Получено · сумма условная</small></span><b>19 783 ₴</b><svg><use href="#i-chevron"/></svg></button>
+          <button type="button" data-action="document"><span class="finance-icon act">✓</span><span><strong>Акт выполненных работ №11</strong><small>Оплачен</small></span><b>55 651 ₴</b><svg><use href="#i-chevron"/></svg></button>
+          <button type="button" data-action="document"><span class="finance-icon act">✓</span><span><strong>Акт выполненных работ №10</strong><small>Оплачен</small></span><b>50 023 ₴</b><svg><use href="#i-chevron"/></svg></button>
+        </div>
+
+        <div class="finance-note"><svg><use href="#i-lock"/></svg><p><strong>Прозрачно и без внутренней кухни</strong><span>Заказчик видит согласованную смету и расчёты. Закупочные цены и внутренняя маржа бригады остаются в админке.</span></p></div>
+      </section>
+
+      <section class="client-screen" data-screen="documents" aria-labelledby="documents-title">
+        <div class="screen-title">
+          <div class="eyebrow">ФАЙЛЫ ОБЪЕКТА</div>
+          <h1 id="documents-title">Документы</h1>
+          <p>Актуальные версии сметы, договора и актов всегда под рукой.</p>
+        </div>
+
+        <div class="document-group">
+          <h2>Основные</h2>
+          <button class="document-row" type="button" data-action="document"><span class="doc-icon amber"><svg><use href="#i-doc"/></svg></span><span><strong>Смета этапа «Парковый 2»</strong><small>38 позиций · 190 383,50 ₴</small></span><span class="doc-status">Из Excel</span><svg><use href="#i-chevron"/></svg></button>
+          <button class="document-row" type="button" data-action="document"><span class="doc-icon blue"><svg><use href="#i-doc"/></svg></span><span><strong>Прайс малярных работ</strong><small>Стены, потолки и коэффициенты</small></span><svg><use href="#i-chevron"/></svg></button>
+        </div>
+
+        <div class="document-group">
+          <h2>Акты выполненных работ</h2>
+          <button class="document-row" type="button" data-action="document"><span class="doc-icon green"><svg><use href="#i-check"/></svg></span><span><strong>Акт №12</strong><small>Финишная покраска · 64 309 ₴</small></span><span class="doc-status pending">Частично</span><svg><use href="#i-chevron"/></svg></button>
+          <button class="document-row" type="button" data-action="document"><span class="doc-icon green"><svg><use href="#i-check"/></svg></span><span><strong>Акт №11</strong><small>Грунт-краска · 55 651 ₴</small></span><span class="doc-status signed">Оплачен</span><svg><use href="#i-chevron"/></svg></button>
+          <button class="document-row" type="button" data-action="document"><span class="doc-icon green"><svg><use href="#i-check"/></svg></span><span><strong>Акт №10</strong><small>Шпаклёвка и шлифовка · 50 023 ₴</small></span><span class="doc-status signed">Оплачен</span><svg><use href="#i-chevron"/></svg></button>
+        </div>
+
+        <button class="download-all" type="button" data-action="download"><svg><use href="#i-download"/></svg>Скачать документы одним архивом</button>
+      </section>
+    </main>
+
+    <nav class="client-tabbar" aria-label="Разделы кабинета заказчика">
+      <div class="client-tabbar-inner">
+        <button class="client-tab active" type="button" data-tab="overview" aria-current="page"><svg><use href="#i-home"/></svg><span>Обзор</span></button>
+        <button class="client-tab" type="button" data-tab="work"><svg><use href="#i-work"/></svg><span>Ход работ</span></button>
+        <button class="client-tab" type="button" data-tab="finance"><svg><use href="#i-wallet"/></svg><span>Финансы</span></button>
+        <button class="client-tab" type="button" data-tab="documents"><svg><use href="#i-doc"/></svg><span>Документы</span></button>
+      </div>
+    </nav>
+  </div>
+
+  <div class="report-sheet" id="report-sheet" hidden>
+    <button class="sheet-backdrop" type="button" data-close-report aria-label="Закрыть отчёт"></button>
+    <section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="report-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <div><span>ФОТООТЧЁТ · СКРЫТАЯ РАБОТА</span><h2 id="report-title">Грунтование стен</h2></div>
+        <button class="sheet-close" type="button" data-close-report aria-label="Закрыть"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <img class="sheet-photo" src="assets/hidden-work-primer-report.webp" alt="Стена до грунтования, во время нанесения грунтовки и после завершения работы">
+      <div class="sheet-steps"><span><b>1</b>Основание</span><span><b>2</b>Нанесение</span><span><b>3</b>Результат</span></div>
+      <div class="sheet-content">
+        <span class="hidden-badge"><svg><use href="#i-lock"/></svg>Скрытая работа зафиксирована</span>
+        <p>Стены очищены от пыли и равномерно обработаны грунтовкой глубокого проникновения. После высыхания можно наносить шпаклёвку.</p>
+        <dl>
+          <div><dt>Материал</dt><dd>Грунт глубокого проникновения</dd></div>
+          <div><dt>Площадь</dt><dd>146,4 м²</dd></div>
+          <div><dt>Ответственный</dt><dd>Виталий</dd></div>
+        </dl>
+        <div class="sheet-proof"><svg><use href="#i-check"/></svg><p><strong>Работа подтверждена</strong><span>Фото сохранены в истории объекта и будут доступны после завершения ремонта.</span></p></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="client-toast" id="client-toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/client.js"></script>
+</body>
+</html>
