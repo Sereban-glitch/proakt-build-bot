@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"proakt/internal/domain"
+	"proakt/internal/store"
 )
 
 func clientRoutes(mux *http.ServeMux, s *Server) {
@@ -21,6 +22,9 @@ func clientRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /api/clients", s.auth(s.handleClientsList))
 	mux.HandleFunc("POST /api/clients/grant", s.auth(s.handleClientGrant))
 	mux.HandleFunc("POST /api/clients/revoke", s.auth(s.handleClientRevoke))
+	mux.HandleFunc("POST /api/clients/finance", s.auth(s.handleClientFinanceFlag))
+	mux.HandleFunc("GET /api/starter/status", s.auth(s.handleStarterStatus))
+	mux.HandleFunc("POST /api/starter/delete", s.auth(s.handleStarterDelete))
 }
 
 func clientObjectID(r *http.Request) (int64, bool) {
@@ -106,7 +110,11 @@ func (s *Server) handleClientFinance(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	_ = tg
+	visible, err := s.svc.ClientFinanceVisible(r.Context(), tg, oid)
+	if err != nil || !visible {
+		writeJSON(w, 200, map[string]any{"object_id": oid, "hidden": true, "acts": []any{}})
+		return
+	}
 	obj, err := s.svc.GetObject(r.Context(), oid)
 	if err != nil {
 		apiErr(w, err, "объект")
@@ -180,15 +188,56 @@ func (s *Server) handleClientsList(w http.ResponseWriter, r *http.Request) {
 	if !s.mustOwner(w, r, oid) {
 		return
 	}
-	ids, err := s.svc.ClientList(r.Context(), oid)
+	grants, err := s.svc.ClientList(r.Context(), oid)
 	if err != nil {
 		apiErr(w, err, "доступ")
 		return
 	}
-	if ids == nil {
-		ids = []int64{}
+	if grants == nil {
+		grants = []store.ClientGrant{}
 	}
-	writeJSON(w, 200, map[string]any{"object_id": oid, "clients": ids})
+	writeJSON(w, 200, map[string]any{"object_id": oid, "clients": grants})
+}
+
+func (s *Server) handleClientFinanceFlag(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ObjectID int64 `json:"object_id"`
+		TgUserID int64 `json:"tg_user_id"`
+		Show     bool  `json:"show"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.ObjectID <= 0 || req.TgUserID <= 0 {
+		writeErr(w, 400, "нужны object_id и tg_user_id")
+		return
+	}
+	if !s.mustOwner(w, r, req.ObjectID) {
+		return
+	}
+	if err := s.svc.SetClientFinance(r.Context(), req.ObjectID, req.TgUserID, req.Show); err != nil {
+		apiErr(w, err, "финансы")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"show_finance": req.Show})
+}
+
+func (s *Server) handleStarterStatus(w http.ResponseWriter, r *http.Request) {
+	has, err := s.svc.StarterHasData(r.Context(), chatOf(r))
+	if err != nil {
+		apiErr(w, err, "стартовые данные")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"has_starter": has})
+}
+
+func (s *Server) handleStarterDelete(w http.ResponseWriter, r *http.Request) {
+	rep, err := s.svc.DeleteStarterData(r.Context(), chatOf(r))
+	if err != nil {
+		apiErr(w, err, "очистка")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"deleted_objects": rep.Objects, "deleted_prices": rep.Prices})
 }
 
 func (s *Server) handleClientGrant(w http.ResponseWriter, r *http.Request) {
@@ -213,7 +262,8 @@ func (s *Server) handleClientGrant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"granted": true})
 }
 
-func (s *Server) handleClientRevoke(w http.ResponseWriter, r *http.Request) {	var req struct {
+func (s *Server) handleClientRevoke(w http.ResponseWriter, r *http.Request) {
+	var req struct {
 		ObjectID int64 `json:"object_id"`
 		TgUserID int64 `json:"tg_user_id"`
 	}

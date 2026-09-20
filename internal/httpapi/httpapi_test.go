@@ -357,15 +357,15 @@ func (f *fakeSvc) ClientObjects(_ context.Context, tg int64) ([]domain.ObjectBri
 	}
 	return out, nil
 }
-func (f *fakeSvc) ClientList(_ context.Context, oid int64) ([]int64, error) {
-	var out []int64
+func (f *fakeSvc) ClientList(_ context.Context, oid int64) ([]store.ClientGrant, error) {
+	var out []store.ClientGrant
 	for tg, ids := range f.clientAllow {
 		if containsID(ids, oid) {
-			out = append(out, tg)
+			out = append(out, store.ClientGrant{UserID: tg, ShowFinance: true})
 		}
 	}
 	if out == nil {
-		out = []int64{}
+		out = []store.ClientGrant{}
 	}
 	return out, nil
 }
@@ -377,6 +377,23 @@ func (f *fakeSvc) ClientPhoto(_ context.Context, tg, pid int64) (domain.PhotoRec
 	}
 	return domain.PhotoRec{}, store.ErrNotFound
 }
+func (f *fakeSvc) SetClientFinance(_ context.Context, _, _ int64, _ bool) error { return nil }
+func (f *fakeSvc) ClientFinanceVisible(_ context.Context, _, _ int64) (bool, error) {
+	return true, nil
+}
+func (f *fakeSvc) DeleteObject(_ context.Context, chatID, objID int64) (string, error) {
+	for i, o := range f.objs {
+		if o.ID == objID && o.ChatID == chatID {
+			f.objs = append(f.objs[:i], f.objs[i+1:]...)
+			return o.Name, nil
+		}
+	}
+	return "", store.ErrNotFound
+}
+func (f *fakeSvc) DeleteStarterData(_ context.Context, _ int64) (store.StarterReport, error) {
+	return store.StarterReport{}, nil
+}
+func (f *fakeSvc) StarterHasData(_ context.Context, _ int64) (bool, error) { return false, nil }
 
 func containsID(ids []int64, id int64) bool {
 	for _, v := range ids {

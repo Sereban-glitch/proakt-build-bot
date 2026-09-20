@@ -82,8 +82,15 @@ type Service interface {
 	RevokeClient(ctx context.Context, objectID, tgUserID int64) error
 	CanClientSee(ctx context.Context, tgUserID, objectID int64) (bool, error)
 	ClientObjects(ctx context.Context, tgUserID int64) ([]domain.ObjectBrief, error)
-	ClientList(ctx context.Context, objectID int64) ([]int64, error)
+	ClientList(ctx context.Context, objectID int64) ([]store.ClientGrant, error)
 	ClientPhoto(ctx context.Context, tgUserID, photoID int64) (domain.PhotoRec, error)
+	SetClientFinance(ctx context.Context, objectID, tgUserID int64, show bool) error
+	ClientFinanceVisible(ctx context.Context, tgUserID, objectID int64) (bool, error)
+
+	// --- 360: стартовые примеры и удаление объекта ---
+	DeleteObject(ctx context.Context, chatID, objID int64) (string, error)
+	DeleteStarterData(ctx context.Context, chatID int64) (store.StarterReport, error)
+	StarterHasData(ctx context.Context, chatID int64) (bool, error)
 }
 
 // Config — параметры HTTP-сервера.

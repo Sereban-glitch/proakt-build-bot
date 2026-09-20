@@ -114,6 +114,37 @@ export function view({ root, params, navigate }) {
         });
         form.append(input, bindBtn.el, unbindBtn.el);
         accessCard.appendChild(form);
+        const grantsBox = document.createElement('div');
+        grantsBox.className = 'client-grants';
+        accessCard.appendChild(grantsBox);
+        api.clientsList && api.clientsList(o.id).then((g) => {
+          const list = g?.clients ?? [];
+          if (!list.length) {
+            grantsBox.textContent = 'Заказчик пока не привязан.';
+            return;
+          }
+          for (const c of list) {
+            const row = document.createElement('div');
+            row.className = 'client-grant-row';
+            const who = document.createElement('span');
+            who.className = 'num';
+            who.textContent = `ID ${c.UserID ?? c.user_id ?? c.tg_user_id}`;
+            const fin = c.ShowFinance ?? c.show_finance ?? true;
+            const tgl = Button({
+              label: fin ? 'Финансы: видны' : 'Финансы: скрыты',
+              iconName: 'wallet', variant: 'secondary', block: false,
+              onClick: async () => {
+                try {
+                  await api.clientFinanceFlag(o.id, c.UserID ?? c.user_id ?? c.tg_user_id, !fin);
+                  haptics.success();
+                  toast(!fin ? 'Финансы открыты заказчику' : 'Финансы скрыты от заказчика', { icon: '💰' });
+                } catch (e) { toast(e?.message || 'Не переключилось', { icon: '⚠️' }); }
+              },
+            });
+            row.append(who, tgl.el);
+            grantsBox.appendChild(row);
+          }
+        }).catch(() => {});
       }
 
       const actions = document.createElement('div');
@@ -250,6 +281,29 @@ export function view({ root, params, navigate }) {
     const wrapBtn = document.createElement('div');
     wrapBtn.className = 'section';
     wrapBtn.appendChild(archiveBtn.el);
+    if (!isDemo && typeof api.deleteObject === 'function') {
+    const deleteBtn = Button({
+      label: 'Удалить объект навсегда', iconName: 'trash', variant: 'danger', block: true,
+      onClick: async () => {
+        const ok = await confirmSheet({
+          title: 'Удалить навсегда?',
+          text: `«${o.name}» уйдёт вместе с актами, сметами, оплатами и фото. Это необратимо.`,
+          confirmLabel: 'Удалить навсегда',
+          icon: '🗑',
+        });
+        if (!ok) return;
+        try {
+          await api.deleteObject(o.id);
+          haptics.success();
+          toast('Объект удалён', { icon: '🗑' });
+          navigate('#/objects');
+        } catch (err) {
+          toast(err.message, { tone: 'danger' });
+        }
+      },
+    });
+    wrapBtn.appendChild(deleteBtn.el);
+    }
     content.appendChild(wrapBtn);
   }).catch((e) => {
     content.replaceChildren();

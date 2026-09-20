@@ -153,6 +153,18 @@ CREATE TABLE IF NOT EXISTS client_access (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (object_id, tg_user_id)
 );
+ALTER TABLE client_access ADD COLUMN IF NOT EXISTS show_finance BOOLEAN NOT NULL DEFAULT TRUE;
+-- 360: метки стартовых примеров (кнопка «Удалить стартовые примеры»).
+CREATE TABLE IF NOT EXISTS seed_objects (
+  object_id  BIGINT PRIMARY KEY REFERENCES objects(id) ON DELETE CASCADE,
+  chat_id    BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS seed_catalog (
+  chat_id BIGINT NOT NULL,
+  name    TEXT NOT NULL,
+  PRIMARY KEY (chat_id, name)
+);
 `
 
 type Store struct{ pool *pgxpool.Pool }

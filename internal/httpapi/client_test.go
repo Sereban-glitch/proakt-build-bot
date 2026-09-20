@@ -59,7 +59,8 @@ func TestClientOverviewForbidden(t *testing.T) {
 	})
 }
 
-func TestClientGrantOwnerOnly(t *testing.T) {	f := &fakeSvc{
+func TestClientGrantOwnerOnly(t *testing.T) {
+	f := &fakeSvc{
 		chat: 777,
 		objs: []domain.ObjectBrief{{Object: domain.Object{ID: 1, ChatID: 777, Name: "Парковый 2"}}},
 	}
@@ -81,8 +82,8 @@ func TestClientGrantOwnerOnly(t *testing.T) {	f := &fakeSvc{
 
 func TestClientPhotoFileAccess(t *testing.T) {
 	f := &fakeSvc{
-		chat: 777,
-		objs: []domain.ObjectBrief{{Object: domain.Object{ID: 1, ChatID: 777, Name: "Парковый 2"}}},
+		chat:         777,
+		objs:         []domain.ObjectBrief{{Object: domain.Object{ID: 1, ChatID: 777, Name: "Парковый 2"}}},
 		clientPhotos: []domain.PhotoRec{{ID: 1001, ObjectID: 1, ActID: nil, Caption: "Грунт"}},
 	}
 	f.clientAllow = map[int64][]int64{555: {1}}
@@ -98,6 +99,43 @@ func TestClientPhotoFileAccess(t *testing.T) {
 		w := authedAs(t, s, 555, "GET", "/api/client/photos/1001/file", "")
 		if w.Code != 404 {
 			t.Fatalf("хочу 404 (нет файла), получил %d", w.Code)
+		}
+	})
+}
+
+func TestObjectDeleteOwnerOnly(t *testing.T) {
+	f := &fakeSvc{
+		chat: 777,
+		objs: []domain.ObjectBrief{{Object: domain.Object{ID: 1, ChatID: 777, Name: "Парковый 2"}}},
+	}
+	s := New(Config{Listen: "off", BotToken: testToken}, f)
+
+	t.Run("владелец удаляет", func(t *testing.T) {
+		w := authedAs(t, s, 777, "DELETE", "/api/objects/1", "")
+		if w.Code != 200 {
+			t.Fatalf("код %d: %s", w.Code, w.Body.String())
+		}
+	})
+	t.Run("чужой не удаляет", func(t *testing.T) {
+		w := authedAs(t, s, 666, "DELETE", "/api/objects/1", "")
+		if w.Code != 404 {
+			t.Fatalf("хочу 404, получил %d", w.Code)
+		}
+	})
+}
+
+func TestStarterEndpoints(t *testing.T) {
+	f := &fakeSvc{chat: 777}
+	s := New(Config{Listen: "off", BotToken: testToken}, f)
+
+	t.Run("статус и очистка доступны владельцу", func(t *testing.T) {
+		w := authedAs(t, s, 777, "GET", "/api/starter/status", "")
+		if w.Code != 200 {
+			t.Fatalf("статус %d", w.Code)
+		}
+		w = authedAs(t, s, 777, "POST", "/api/starter/delete", "")
+		if w.Code != 200 {
+			t.Fatalf("очистка %d: %s", w.Code, w.Body.String())
 		}
 	})
 }

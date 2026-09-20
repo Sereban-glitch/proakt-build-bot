@@ -47,6 +47,12 @@ func main() {
 	}
 	fmt.Printf("смета %d: итог %.2f\n", estID, estTotal)
 
+	done, err := st.Seed360EstimateProgress(ctx, master, rep.ObjectID)
+	if err != nil {
+		log.Fatalf("Seed360EstimateProgress: %v", err)
+	}
+	fmt.Printf("строк сметы помечено готовыми: %d\n", done)
+
 	upgraded, err := st.Seed360Upgrade(ctx, master)
 	if err != nil {
 		log.Fatalf("Seed360Upgrade: %v", err)
@@ -68,9 +74,15 @@ func main() {
 		if err != nil || tg <= 0 {
 			log.Fatalf("SEED_CLIENT_ID: %q не число", raw)
 		}
-		if err := st.GrantClient(ctx, rep.ObjectID, tg); err != nil {
-			log.Fatalf("GrantClient %d: %v", tg, err)
+		objs, err := st.ListObjects(ctx, master)
+		if err != nil {
+			log.Fatalf("ListObjects: %v", err)
 		}
-		fmt.Printf("заказчик %d привязан к объекту %d\n", tg, rep.ObjectID)
+		for _, o := range objs {
+			if err := st.GrantClient(ctx, o.ID, tg); err != nil {
+				log.Fatalf("GrantClient %d на %d: %v", tg, o.ID, err)
+			}
+			fmt.Printf("заказчик %d привязан к объекту %d (%s)\n", tg, o.ID, o.Name)
+		}
 	}
 }

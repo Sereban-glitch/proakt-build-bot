@@ -6,11 +6,12 @@
 
 import { api } from '../services/api.js';
 import { money, dateShort, plural } from '../services/format.js';
-import { Card, Cell, Empty, skeletons, actBadge } from '../components/ui/primitives.js';
+import { Card, Cell, Empty, skeletons, actBadge, Button } from '../components/ui/primitives.js';
 import { BrandHeader } from '../components/layout/chrome.js';
 import { ProgressBar } from '../components/ui/adv.js';
 import { icon } from '../components/ui/icon.js';
-import { toast } from '../components/ui/feedback.js';
+import { toast, confirmSheet } from '../components/ui/feedback.js';
+import { haptics } from '../services/tg.js';
 
 const STATUS_LABEL = {
   draft: 'Черновик',
@@ -192,6 +193,39 @@ export function view({ root, navigate }) {
     hint.textContent = 'Начни с действия — остальное приложение подскажет по ходу.';
     intro.append(hello, hint);
     content.appendChild(intro);
+
+    // Стартовые примеры: уведомление + безопасная очистка (только своё, с подтверждением).
+    if (typeof api.starterStatus === 'function') {
+      api.starterStatus().then((st) => {
+        if (!st?.has_starter) return;
+        const note = Card({ className: 'section starter-note' });
+        const t = document.createElement('div');
+        t.className = 'card-title';
+        t.textContent = 'Стартовые примеры';
+        const p = document.createElement('p');
+        p.textContent = 'База предварительно заполнена стартовыми данными. Проверь суммы и удали ненужное перед настоящей работой — твои записи не трону.';
+        const del = Button({
+          label: 'Удалить стартовые примеры', iconName: 'trash', variant: 'danger', block: true,
+          onClick: async () => {
+            const ok = await confirmSheet({
+              title: 'Удалить примеры?',
+              text: 'Уйдут только стартовые объекты и цены. Твои объекты, акты и оплаты останутся.',
+              confirmLabel: 'Удалить примеры',
+              icon: '🗑',
+            });
+            if (!ok) return;
+            try {
+              const r = await api.starterDelete();
+              haptics.success();
+              toast(`Убрано: объектов ${r.deleted_objects}, цен ${r.deleted_prices}`, { icon: '🗑' });
+              location.reload();
+            } catch (e) { toast(e?.message || 'Не удалилось', { icon: '⚠️' }); }
+          },
+        });
+        note.append(t, p, del.el);
+        content.insertBefore(note, content.children[1] || null);
+      }).catch(() => {});
+    }
 
     const actions = document.createElement('div');
     actions.className = 'quick-actions';

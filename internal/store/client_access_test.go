@@ -31,8 +31,18 @@ func TestClientAccessGrantRevoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClientList: %v", err)
 	}
-	if len(ids) != 1 || ids[0] != tg {
-		t.Fatalf("привязано %v, хочу [%d]", ids, tg)
+	if len(ids) != 1 || ids[0].UserID != tg || !ids[0].ShowFinance {
+		t.Fatalf("привязка %v, хочу [{tg %d, финансы видны}]", ids, tg)
+	}
+	if err := st.SetClientFinance(ctx, o.ID, tg, false); err != nil {
+		t.Fatalf("SetClientFinance: %v", err)
+	}
+	vis, err := st.ClientFinanceVisible(ctx, tg, o.ID)
+	if err != nil {
+		t.Fatalf("ClientFinanceVisible: %v", err)
+	}
+	if vis {
+		t.Fatalf("финансы должны быть скрыты")
 	}
 	if err := st.RevokeClient(ctx, o.ID, tg); err != nil {
 		t.Fatalf("revoke: %v", err)

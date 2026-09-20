@@ -10,8 +10,8 @@ import (
 // GrantClient привязывает заказчика к объекту (повторно — включает обратно).
 func (s *Store) GrantClient(ctx context.Context, objectID, tgUserID int64) error {
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO client_access(object_id, tg_user_id, status) VALUES($1,$2,'active')
-		 ON CONFLICT (object_id, tg_user_id) DO UPDATE SET status='active'`,
+		`INSERT INTO client_access(object_id, tg_user_id, status, show_finance) VALUES($1,$2,'active',TRUE)
+		 ON CONFLICT (object_id, tg_user_id) DO UPDATE SET status='active', show_finance=TRUE`,
 		objectID, tgUserID)
 	return err
 }
@@ -74,22 +74,25 @@ WHERE p.id=$1 AND c.tg_user_id=$2 AND c.status='active'`,
 	return p, nil
 }
 
-// ClientList — привязанные ID заказчика по объекту (для админки).
-func (s *Store) ClientList(ctx context.Context, objectID int64) ([]int64, error) {
+// ClientList — привязки объекта (для админки).
+func (s *Store) ClientList(ctx context.Context, objectID int64) ([]ClientGrant, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT tg_user_id FROM client_access WHERE object_id=$1 AND status='active' ORDER BY tg_user_id`,
+		`SELECT tg_user_id, show_finance FROM client_access WHERE object_id=$1 AND status='active' ORDER BY tg_user_id`,
 		objectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	var out []ClientGrant
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var g ClientGrant
+		if err := rows.Scan(&g.UserID, &g.ShowFinance); err != nil {
 			return nil, err
 		}
-		out = append(out, id)
+		out = append(out, g)
+	}
+	if out == nil {
+		out = []ClientGrant{}
 	}
 	return out, rows.Err()
 }

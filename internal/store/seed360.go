@@ -32,35 +32,23 @@ func realLines(actNo int) []domain.DraftLine {
 	return out
 }
 
-// Seed360 заливает объект Виталия под chatID мастера.
+// Seed360 заливает стартовые объекты Виталия под chatID мастера:
+// Парковый 2 (12 актов + смета + прайс), замеры, фасад (2 акта).
 func (s *Store) Seed360(ctx context.Context, chatID int64) (Seed360Report, error) {
 	var rep Seed360Report
 
-	objs, err := s.ListObjects(ctx, chatID)
+	parkID, err := s.ensureSeedObject(ctx, chatID, "Парковый 2 · квартира", "Заказчик · данные скрыты")
 	if err != nil {
 		return rep, err
 	}
-	var objID int64
-	for _, o := range objs {
-		if o.Name == "Парковый 2 · квартира" {
-			objID = o.ID
-		}
-	}
-	if objID == 0 {
-		o, err := s.CreateObject(ctx, chatID, "Парковый 2 · квартира", "Заказчик · данные скрыты")
-		if err != nil {
-			return rep, err
-		}
-		objID = o.ID
-	}
-	rep.ObjectID = objID
+	rep.ObjectID = parkID
 
 	for actNo := 1; actNo <= 12; actNo++ {
 		lines := toDraft(realLines(actNo))
 		if len(lines) == 0 {
 			continue
 		}
-		if _, err := s.createActFixedNo(ctx, objID, actNo, lines); err != nil {
+		if _, err := s.createActFixedNo(ctx, parkID, actNo, lines); err != nil {
 			return rep, err
 		}
 		for _, l := range lines {
@@ -72,7 +60,76 @@ func (s *Store) Seed360(ctx context.Context, chatID int64) (Seed360Report, error
 	if _, err := s.BulkUpsertCatalog(ctx, chatID, seedCatalog); err != nil {
 		return rep, err
 	}
+	var catNames []string
+	for _, c := range seedCatalog {
+		catNames = append(catNames, c.Name)
+	}
+	if err := s.MarkStarterCatalog(ctx, chatID, catNames); err != nil {
+		return rep, err
+	}
+
+	if _, err := s.ensureSeedObject(ctx, chatID, "Квартира · новый расчёт", "Заказчик (демо)"); err != nil {
+		return rep, err
+	}
+	fasadID, err := s.ensureSeedObject(ctx, chatID, "Частный дом · фасад", "Заказчик (демо)")
+	if err != nil {
+		return rep, err
+	}
+	fasadActs := map[int][]domain.DraftLine{
+		1: {{Name: "Подготовка фасада", Qty: 140, Unit: "м²", Price: 300, Sum: 42000}},
+		2: {{Name: "Покраска фасада", Qty: 150, Unit: "м²", Price: 350, Sum: 52500}},
+	}
+	for actNo, lines := range fasadActs {
+		if _, err := s.createActFixedNo(ctx, fasadID, actNo, lines); err != nil {
+			return rep, err
+		}
+	}
+	fasadPhotos := []struct {
+		actNo   int
+		caption string
+	}{
+		{1, "Фасад, подготовка · демо"},
+		{2, "Фасад, готово · демо"},
+	}
+	for _, ph := range fasadPhotos {
+		var actID int64
+		err := s.pool.QueryRow(ctx, `SELECT id FROM acts WHERE object_id=$1 AND act_no=$2`, fasadID, ph.actNo).Scan(&actID)
+		if err != nil {
+			return rep, err
+		}
+		if _, err := s.pool.Exec(ctx,
+			`INSERT INTO photos(act_id, object_id, file_id, file_path, caption)
+			 SELECT $1, $2, '', '', $3 WHERE NOT EXISTS
+			 (SELECT 1 FROM photos WHERE object_id=$2 AND caption=$3)`,
+			actID, fasadID, ph.caption); err != nil {
+			return rep, err
+		}
+	}
 	return rep, nil
+}
+
+// ensureSeedObject — объект по имени + метка стартового.
+func (s *Store) ensureSeedObject(ctx context.Context, chatID int64, name, customer string) (int64, error) {
+	objs, err := s.ListObjects(ctx, chatID)
+	if err != nil {
+		return 0, err
+	}
+	for _, o := range objs {
+		if o.Name == name {
+			if err := s.MarkStarterObject(ctx, chatID, o.ID); err != nil {
+				return 0, err
+			}
+			return o.ID, nil
+		}
+	}
+	o, err := s.CreateObject(ctx, chatID, name, customer)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.MarkStarterObject(ctx, chatID, o.ID); err != nil {
+		return 0, err
+	}
+	return o.ID, nil
 }
 
 // Seed360Upgrade меняет строки-заглушки («Работы по акту · архив Виталия»)

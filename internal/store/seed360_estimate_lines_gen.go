@@ -1,0 +1,46 @@
+// Code generated from Parkovy2 estimate xlsx (Google Drive). DO NOT EDIT manually.
+package store
+
+import "proakt/internal/domain"
+
+// seed360EstimateLines — 38 позиций 1-в-1 из сметы, готовые помечены done (кроме 2 финальных).
+var seed360EstimateLines = []domain.EstimateLine{
+	{Name: "укрывка окон гофрокартоном", Qty: 12.0, Unit: "м.п", Price: 25.0, Hidden: true, Done: true},
+	{Name: "заделка штроб", Qty: 47.0, Unit: "м.п", Price: 60.0, Hidden: true, Done: true},
+	{Name: "поклейка пенополистирола на балконе на верхние откос", Qty: 1.0, Unit: "м²", Price: 100.0, Hidden: true, Done: true},
+	{Name: "грунтовка откосов и участков стен до 60см перед штукатуркой", Qty: 18.5, Unit: "м.п", Price: 25.0, Hidden: true, Done: true},
+	{Name: "установка перфорированного пластикового уголка", Qty: 9.8, Unit: "м.п", Price: 80.0, Hidden: true, Done: true},
+	{Name: "армировка откосов и участков стен стекловолоконной сеткой", Qty: 18.5, Unit: "м.п", Price: 80.0, Hidden: true, Done: true},
+	{Name: "отпуск дверных проёмов", Qty: 5.0, Unit: "м²", Price: 200.0, Hidden: true, Done: true},
+	{Name: "шлифовка стен штукатурки перед шпаклёвкой", Qty: 146.4, Unit: "м²", Price: 50.0, Hidden: true, Done: true},
+	{Name: "шлифовка откосов и участков стен до 60см штукатурки перед шпаклёвкой", Qty: 97.7, Unit: "м.п", Price: 50.0, Hidden: true, Done: true},
+	{Name: "грунтовка стен перед шпаклёвкой", Qty: 146.4, Unit: "м²", Price: 25.0, Hidden: true, Done: true},
+	{Name: "грунтовка откосов ригелей и участков стен до 60см перед шпаклёвкой", Qty: 97.7, Unit: "м.п", Price: 25.0, Hidden: true, Done: true},
+	{Name: "шпаклёвка стен под стеклохолст", Qty: 140.5, Unit: "м²", Price: 140.0, Hidden: true, Done: true},
+	{Name: "шпаклёвка под стеклохолст откосов и участков стен до 60см", Qty: 97.7, Unit: "м.п", Price: 140.0, Hidden: true, Done: true},
+	{Name: "шлифовка шпаклёвки стен под стеклохолст", Qty: 140.5, Unit: "м²", Price: 50.0, Hidden: true, Done: true},
+	{Name: "шлифовка шпаклёвки откосов и участков стен до 60см", Qty: 97.7, Unit: "м.п", Price: 50.0, Hidden: true, Done: true},
+	{Name: "грунтовка стен перед поклейкой стеклохолста", Qty: 75.0, Unit: "м²", Price: 25.0, Hidden: true, Done: true},
+	{Name: "грунтовка откосов и участков стен до 60см перед поклейкой стеклохолста", Qty: 79.7, Unit: "м.п", Price: 25.0, Hidden: true, Done: true},
+	{Name: "поклейка стеклохолста на стены", Qty: 75.0, Unit: "м²", Price: 120.0, Hidden: true, Done: true},
+	{Name: "поклейка стеклохолста на откосы и участки стен до 60см", Qty: 79.7, Unit: "м.п", Price: 120.0, Hidden: true, Done: true},
+	{Name: "шпаклёвка стен под покраску по стекло холсту", Qty: 75.0, Unit: "м²", Price: 200.0, Hidden: true, Done: true},
+	{Name: "шпаклёвка откосов и участков стен до 60см под покраску по стеклохолсту", Qty: 79.7, Unit: "м.п", Price: 200.0, Hidden: true, Done: true},
+	{Name: "шлифовка шпаклёвки стен под покраску", Qty: 75.0, Unit: "м²", Price: 50.0, Hidden: true, Done: true},
+	{Name: "шлифовка откосов и участков стен до 60см под покраску", Qty: 79.7, Unit: "м.п", Price: 50.0, Hidden: true, Done: true},
+	{Name: "грунтовка гипсовых панелей обратной стороны перед монтажом", Qty: 5.9, Unit: "м²", Price: 25.0, Hidden: true, Done: true},
+	{Name: "поклейка гипсовых панелей", Qty: 5.9, Unit: "м²", Price: 700.0, Hidden: true, Done: true},
+	{Name: "вырезать и поклеить блок для розеток на гипсовые панели", Qty: 1.0, Unit: "м²", Price: 500.0, Hidden: true, Done: true},
+	{Name: "шпаклёвка стыков гипсовой панели плюс шлифовка доводка под покраску", Qty: 5.9, Unit: "м²", Price: 500.0, Hidden: true, Done: true},
+	{Name: "грунтовка гипсовых панелей под покраску", Qty: 5.9, Unit: "м²", Price: 75.0, Hidden: true, Done: true},
+	{Name: "грунтовка стен под покраску", Qty: 129.3, Unit: "м²", Price: 25.0, Hidden: true, Done: true},
+	{Name: "грунтовка откосов и участков стен до 60 см под покраску", Qty: 81.7, Unit: "м.п", Price: 25.0, Hidden: true, Done: true},
+	{Name: "нанесение грунт краски на гипсовые панели", Qty: 5.9, Unit: "м²", Price: 180.0, Hidden: true, Done: true},
+	{Name: "нанесение грунт краски на стены", Qty: 129.3, Unit: "м²", Price: 60.0, Hidden: true, Done: true},
+	{Name: "нанесение грунт краски на откосы и участки стен до 60см", Qty: 81.7, Unit: "м.п", Price: 60.0, Hidden: true, Done: true},
+	{Name: "нанесение акрила на углы примыкание и разделение цветов краски", Qty: 16.2, Unit: "м.п", Price: 170.0, Hidden: true, Done: true},
+	{Name: "покраска гипсовых панелей безвоздушным методом", Qty: 5.9, Unit: "м²", Price: 360.0, Hidden: false, Done: true},
+	{Name: "покраска стен безвоздушным методом", Qty: 129.3, Unit: "м²", Price: 120.0, Hidden: true, Done: false, Note: "В работе"},
+	{Name: "покраска откосов и участков стен до 60см безвоздушным методом", Qty: 81.7, Unit: "м.п", Price: 120.0, Hidden: true, Done: false, Note: "Следующий этап"},
+	{Name: "армировка примыкания балконного остекления стеклохолстом", Qty: 5.6, Unit: "м.п", Price: 250.0, Hidden: true, Done: true},
+}

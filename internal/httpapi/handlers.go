@@ -20,6 +20,7 @@ func routes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /api/objects", a(s.handleObjectsList))
 	mux.HandleFunc("POST /api/objects", a(s.handleObjectCreate))
 	mux.HandleFunc("POST /api/objects/{id}/archive", a(s.handleObjectArchive))
+	mux.HandleFunc("DELETE /api/objects/{id}", a(s.handleObjectDelete))
 	mux.HandleFunc("GET /api/acts", a(s.handleActsList))
 	mux.HandleFunc("GET /api/acts/{id}", a(s.handleActGet))
 	mux.HandleFunc("DELETE /api/acts/{id}", a(s.handleActDelete))
@@ -164,6 +165,20 @@ func (s *Server) handleObjectArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"archived": true, "name": name})
+}
+
+func (s *Server) handleObjectDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "Некорректный id объекта")
+		return
+	}
+	name, err := s.svc.DeleteObject(r.Context(), chatOf(r), id)
+	if err != nil {
+		apiErr(w, err, "объект")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "name": name})
 }
 
 // --- акты --------------------------------------------------------------------
