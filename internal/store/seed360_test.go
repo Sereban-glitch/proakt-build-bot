@@ -2,10 +2,10 @@ package store
 
 import (
 	"testing"
-
-	"proakt/internal/domain"
 )
 
+// Контрольные суммы — из заметок Виталия (seed360_real_gen.go):
+// почти все акты бьются в копейку, №2 и №7 — как в источнике.
 func TestSeed360ControlSums(t *testing.T) {
 	st := openTestStore(t)
 	chat := uniqueChat()
@@ -16,8 +16,21 @@ func TestSeed360ControlSums(t *testing.T) {
 	if rep.Acts != 12 {
 		t.Fatalf("актов %d, хочу 12", rep.Acts)
 	}
-	if rep.Total != 549526 {
-		t.Fatalf("сумма %v, хочу 549526", rep.Total)
+	var wantTotal float64
+	for actNo := 1; actNo <= 12; actNo++ {
+		for _, l := range seedRealLines[actNo] {
+			wantTotal += l.Sum
+		}
+	}
+	if rep.Total != wantTotal {
+		t.Fatalf("сумма %v, хочу %v", rep.Total, wantTotal)
+	}
+	cat, err := st.ListCatalog(t.Context(), chat)
+	if err != nil {
+		t.Fatalf("ListCatalog: %v", err)
+	}
+	if len(cat) != len(seedCatalog) {
+		t.Fatalf("прайс %d позиций, хочу %d", len(cat), len(seedCatalog))
 	}
 	// Повтор — не дублирует.
 	rep2, err := st.Seed360(t.Context(), chat)
@@ -34,34 +47,39 @@ func TestSeed360ControlSums(t *testing.T) {
 	if len(acts) != 12 {
 		t.Fatalf("в базе актов %d, хочу 12", len(acts))
 	}
-	var total float64
-	for _, a := range acts {
-		total += a.Total
+	// Апгрейд заглушек + демо-оплаты.
+	if _, err := st.Seed360Upgrade(t.Context(), chat); err != nil {
+		t.Fatalf("Seed360Upgrade: %v", err)
 	}
-	if total != 549526 {
-		t.Fatalf("сумма в базе %v, хочу 549526", total)
-	}
-	// Акт №12 — детальные строки, сумма 64309.
-	lines, err := st.ActLines(t.Context(), findAct(t, acts, 12))
+	added, err := st.Seed360DemoPayments(t.Context(), chat)
 	if err != nil {
-		t.Fatalf("ActLines 12: %v", err)
+		t.Fatalf("Seed360DemoPayments: %v", err)
 	}
-	var s12 float64
-	for _, l := range lines {
-		s12 += l.Sum
+	if added != 12 {
+		t.Fatalf("демо-оплат %d, хочу 12", added)
 	}
-	if s12 != 64309 {
-		t.Fatalf("акт 12 сумма %v, хочу 64309", s12)
+	added2, err := st.Seed360DemoPayments(t.Context(), chat)
+	if err != nil {
+		t.Fatalf("Seed360DemoPayments повтор: %v", err)
+	}
+	if added2 != 0 {
+		t.Fatalf("повтор добавил %d оплат, хочу 0", added2)
 	}
 }
 
-func findAct(t *testing.T, acts []domain.ActBrief, no int) int64 {
-	t.Helper()
-	for _, a := range acts {
-		if a.ActNo == no {
-			return a.ID
+func TestSeed360RealLinesMatchNotes(t *testing.T) {
+	// Суммы из заметок Виталия (контроль парсера/генератора).
+	want := map[int]float64{
+		1: 38980, 2: 42563, 3: 34296, 4: 40720, 5: 39470, 6: 41024,
+		7: 45886, 8: 48340, 9: 48127, 10: 50023, 11: 55651, 12: 64309,
+	}
+	for actNo, w := range want {
+		var got float64
+		for _, l := range seedRealLines[actNo] {
+			got += l.Sum
+		}
+		if got != w {
+			t.Errorf("акт %d: сумма %v, хочу %v", actNo, got, w)
 		}
 	}
-	t.Fatalf("акт №%d не найден", no)
-	return 0
 }

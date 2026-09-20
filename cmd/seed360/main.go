@@ -47,6 +47,18 @@ func main() {
 	}
 	fmt.Printf("смета %d: итог %.2f\n", estID, estTotal)
 
+	upgraded, err := st.Seed360Upgrade(ctx, master)
+	if err != nil {
+		log.Fatalf("Seed360Upgrade: %v", err)
+	}
+	fmt.Printf("актов обновлено настоящими строками: %d\n", upgraded)
+
+	demoPayed, err := st.Seed360DemoPayments(ctx, master)
+	if err != nil {
+		log.Fatalf("Seed360DemoPayments: %v", err)
+	}
+	fmt.Printf("демо-оплат добавлено: %d\n", demoPayed)
+
 	for _, raw := range strings.Split(os.Getenv("SEED_CLIENT_ID"), ",") {
 		raw = strings.TrimSpace(raw)
 		if raw == "" {

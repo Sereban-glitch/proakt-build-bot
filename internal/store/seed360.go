@@ -1,8 +1,8 @@
-// Сид «ПрорАКТ 360» — калиброванные данные Виталия (объект Парковый 2).
+// Сид «ПрорАКТ 360» — настоящие данные Виталия (объект Парковый 2).
 //
-// Источник: internal/webapp/static/js/services/mock.js (12 актов, смета).
+// Источник строк: заметки Виталия (Google Drive), прайс — смета Парковый 2.
 // Повторный запуск не дублирует: объект ищем по имени, акты — по
-// (object_id, act_no) через ON CONFLICT DO NOTHING, прайс — через Upsert.
+// (object_id, act_no), прайс — через BulkUpsert, оплаты — только если их нет.
 package store
 
 import (
@@ -20,21 +20,19 @@ type Seed360Report struct {
 	EstTotal   float64
 }
 
-// seedActSums — 12 сумм из mock.js, порядок = номера актов 1..12.
-var seedActSums = []float64{38980, 42560, 34296, 40720, 39470, 41024, 46026, 48340, 48127, 50023, 55651, 64309}
+// toDraft — строки заметок в черновик акта.
+func toDraft(src []domain.DraftLine) []domain.DraftLine { return src }
 
-// seedAct12Lines — детальные строки акта №12 из mock.js linesByAct[112], 1-в-1.
-var seedAct12Lines = []domain.DraftLine{
-	{Name: "занос материалов", Qty: 23, Unit: "шт", Price: 25, Sum: 575},
-	{Name: "укрывка плёнкой перед малярными работами", Qty: 140, Unit: "м²", Price: 30, Sum: 4200},
-	{Name: "защита примыканий плёнкой и лентой", Qty: 51, Unit: "м.п", Price: 30, Sum: 1530},
-	{Name: "покраска стен валиком", Qty: 104.9, Unit: "м²", Price: 120, Sum: 12588},
-	{Name: "покраска откосов и участков стен", Qty: 115.8, Unit: "м.п", Price: 120, Sum: 13896},
-	{Name: "покраска потолка безвоздушным методом", Qty: 90.4, Unit: "м²", Price: 160, Sum: 14464},
-	{Name: "покраска откосов потолка безвоздушно", Qty: 106.6, Unit: "м.п", Price: 160, Sum: 17056},
+// realLines — настоящие строки акта №actNo (seed360_real_gen.go).
+func realLines(actNo int) []domain.DraftLine {
+	var out []domain.DraftLine
+	for _, l := range seedRealLines[actNo] {
+		out = append(out, domain.DraftLine{Name: l.Name, Qty: l.Qty, Unit: l.Unit, Price: l.Price, Sum: l.Sum})
+	}
+	return out
 }
 
-// Seed360 заливает калиброванный объект Виталия под chatID мастера.
+// Seed360 заливает объект Виталия под chatID мастера.
 func (s *Store) Seed360(ctx context.Context, chatID int64) (Seed360Report, error) {
 	var rep Seed360Report
 
@@ -57,21 +55,107 @@ func (s *Store) Seed360(ctx context.Context, chatID int64) (Seed360Report, error
 	}
 	rep.ObjectID = objID
 
-	for i, sum := range seedActSums {
-		actNo := i + 1
-		var lines []domain.DraftLine
-		if actNo == 12 {
-			lines = seedAct12Lines
-		} else {
-			lines = []domain.DraftLine{{Name: "Работы по акту · архив Виталия", Qty: 1, Unit: "компл", Price: sum, Sum: sum}}
+	for actNo := 1; actNo <= 12; actNo++ {
+		lines := toDraft(realLines(actNo))
+		if len(lines) == 0 {
+			continue
 		}
 		if _, err := s.createActFixedNo(ctx, objID, actNo, lines); err != nil {
 			return rep, err
 		}
-		rep.Total += sum
+		for _, l := range lines {
+			rep.Total += l.Sum
+		}
+		rep.Acts++
 	}
-	rep.Acts = len(seedActSums)
+
+	if _, err := s.BulkUpsertCatalog(ctx, chatID, seedCatalog); err != nil {
+		return rep, err
+	}
 	return rep, nil
+}
+
+// Seed360Upgrade меняет строки-заглушки («Работы по акту · архив Виталия»)
+// на настоящие из заметок. Трогает только акты-заглушки, живые данные целы.
+func (s *Store) Seed360Upgrade(ctx context.Context, chatID int64) (int, error) {
+	acts, err := s.ListActs(ctx, chatID, 100)
+	if err != nil {
+		return 0, err
+	}
+	fixed := 0
+	for _, a := range acts {
+		lines, err := s.ActLines(ctx, a.ID)
+		if err != nil {
+			return fixed, err
+		}
+		if len(lines) != 1 || lines[0].Name != "Работы по акту · архив Виталия" {
+			continue
+		}
+		real := realLines(a.ActNo)
+		if len(real) == 0 {
+			continue
+		}
+		if err := s.ReplaceActLines(ctx, a.ID, real); err != nil {
+			return fixed, err
+		}
+		fixed++
+	}
+	return fixed, nil
+}
+
+// Seed360DemoPayments — демо-оплаты для презентации прогресса (помечены,
+// удаляются через интерфейс). Акты 1–11 — полностью, №12 — частично 19783.
+// Акты, где оплаты уже есть, не трогаем.
+func (s *Store) Seed360DemoPayments(ctx context.Context, chatID int64) (int, error) {
+	acts, err := s.ListActs(ctx, chatID, 100)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for _, a := range acts {
+		if a.ObjectID == 0 {
+			continue
+		}
+		got, err := s.Payments(ctx, a.ID)
+		if err != nil {
+			return added, err
+		}
+		if len(got) > 0 {
+			continue
+		}
+		amount := a.Total
+		if a.ActNo == 12 {
+			amount = 19783
+		}
+		if amount <= 0 {
+			continue
+		}
+		if err := s.CreatePayment(ctx, a.ID, amount, "демо для презентации"); err != nil {
+			return added, err
+		}
+		added++
+	}
+	return added, nil
+}
+
+// ReplaceActLines — заменить все строки акта (одна транзакция).
+func (s *Store) ReplaceActLines(ctx context.Context, actID int64, lines []domain.DraftLine) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `DELETE FROM act_lines WHERE act_id=$1`, actID); err != nil {
+		return err
+	}
+	for i, l := range lines {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO act_lines(act_id, pos, name, qty, unit, price, sum) VALUES($1,$2,$3,$4,$5,$6,$7)`,
+			actID, i+1, l.Name, l.Qty, l.Unit, l.Price, l.Sum); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // createActFixedNo — вставка акта с фиксированным номером, идемпотентно.
