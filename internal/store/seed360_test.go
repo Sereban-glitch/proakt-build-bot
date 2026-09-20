@@ -44,8 +44,8 @@ func TestSeed360ControlSums(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListActs: %v", err)
 	}
-	if len(acts) != 12 {
-		t.Fatalf("в базе актов %d, хочу 12", len(acts))
+	if len(acts) != 14 {
+		t.Fatalf("в базе актов %d, хочу 14 (12 Парковый + 2 фасад)", len(acts))
 	}
 	// Апгрейд заглушек + демо-оплаты.
 	if _, err := st.Seed360Upgrade(t.Context(), chat); err != nil {
@@ -55,8 +55,8 @@ func TestSeed360ControlSums(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Seed360DemoPayments: %v", err)
 	}
-	if added != 12 {
-		t.Fatalf("демо-оплат %d, хочу 12", added)
+	if added != 14 {
+		t.Fatalf("демо-оплат %d, хочу 14", added)
 	}
 	added2, err := st.Seed360DemoPayments(t.Context(), chat)
 	if err != nil {
