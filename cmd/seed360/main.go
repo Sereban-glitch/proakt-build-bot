@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -17,6 +18,8 @@ import (
 )
 
 func main() {
+	cleanup := flag.Bool("cleanup", false, "удалить стартовые примеры и выйти")
+	flag.Parse()
 	ctx := context.Background()
 	cfg, err := config.Load()
 	if err != nil {
@@ -33,6 +36,14 @@ func main() {
 	defer st.Close()
 	if err := st.Migrate(ctx); err != nil {
 		log.Fatalf("миграции: %v", err)
+	}
+	if *cleanup {
+		rep, err := st.DeleteStarterData(ctx, master)
+		if err != nil {
+			log.Fatalf("DeleteStarterData: %v", err)
+		}
+		fmt.Printf("очистка: объектов %d, цен %d\n", rep.Objects, rep.Prices)
+		return
 	}
 
 	rep, err := st.Seed360(ctx, master)
