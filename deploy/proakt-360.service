@@ -1,0 +1,31 @@
+[Unit]
+Description=Proakt 360 pilot (Mini App, рядом с @proakt_build_bot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=master-build
+Group=master-build
+WorkingDirectory=/home/master-build/proakt-360
+EnvironmentFile=/home/master-build/proakt-360/.env
+ExecStart=/home/master-build/proakt-360/proakt
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# Харденинг как у прод-бота: писать только в свой каталог файлов
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/master-build/proakt-360/files
+MemoryMax=96M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=proakt-360
+
+[Install]
+WantedBy=multi-user.target
