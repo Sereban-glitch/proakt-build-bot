@@ -51,8 +51,8 @@ export function view({ root, params, navigate }) {
     }));
     content.appendChild(grid);
 
-    // Демо будущего разграничения доступа по Telegram user_id.
-    if (isDemo && o.id === 1) {
+    // Кабинет заказчика: демо — маска, живьём — форма привязки Telegram ID.
+    if (!isDemo || o.id === 1) {
       const accessCard = Card({ className: 'section client-access-card' });
       const accessHead = document.createElement('div');
       accessHead.className = 'client-access-head';
@@ -65,30 +65,67 @@ export function view({ root, params, navigate }) {
       accessCopy.append(accessTitle, accessSub);
       const connected = document.createElement('span');
       connected.className = 'client-access-status';
-      connected.textContent = 'Подключён';
+      connected.textContent = isDemo ? 'Подключён' : 'Доступ по ID';
       accessHead.append(accessCopy, connected);
       accessCard.appendChild(accessHead);
 
-      const idRow = document.createElement('div');
-      idRow.className = 'client-access-id';
-      const idLabel = document.createElement('span');
-      idLabel.textContent = 'Telegram ID заказчика';
-      const idValue = document.createElement('strong');
-      idValue.className = 'num';
-      idValue.textContent = '583•••741';
-      idRow.append(idLabel, idValue);
-      accessCard.appendChild(idRow);
+      if (isDemo) {
+        const idRow = document.createElement('div');
+        idRow.className = 'client-access-id';
+        const idLabel = document.createElement('span');
+        idLabel.textContent = 'Telegram ID заказчика';
+        const idValue = document.createElement('strong');
+        idValue.className = 'num';
+        idValue.textContent = '583•••741';
+        idRow.append(idLabel, idValue);
+        accessCard.appendChild(idRow);
+      } else {
+        const form = document.createElement('div');
+        form.className = 'client-access-form';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.placeholder = 'Telegram ID заказчика';
+        input.setAttribute('aria-label', 'Telegram ID заказчика');
+        const bindBtn = Button({
+          label: 'Привязать', iconName: 'check', variant: 'primary', block: true,
+          onClick: async () => {
+            const v = Number(String(input.value).replace(/\D/g, ''));
+            if (!v) { toast('Введи числовой Telegram ID', { icon: '⚠️' }); return; }
+            try {
+              await api.clientGrant(o.id, v);
+              haptics.success();
+              toast('Заказчик привязан', { icon: '✅' });
+            } catch (e) { toast(e?.message || 'Не привязалось', { icon: '⚠️' }); }
+          },
+        });
+        const unbindBtn = Button({
+          label: 'Отключить', iconName: 'close', variant: 'secondary', block: true,
+          onClick: async () => {
+            const v = Number(String(input.value).replace(/\D/g, ''));
+            if (!v) { toast('Введи ID для отключения', { icon: '⚠️' }); return; }
+            if (!await confirmSheet({ title: 'Отключить доступ?', text: 'Заказчик перестанет видеть объект.', confirmLabel: 'Отключить' })) return;
+            try {
+              await api.clientRevoke(o.id, v);
+              haptics.success();
+              toast('Доступ отключён', { icon: '🔒' });
+            } catch (e) { toast(e?.message || 'Не отключилось', { icon: '⚠️' }); }
+          },
+        });
+        form.append(input, bindBtn.el, unbindBtn.el);
+        accessCard.appendChild(form);
+      }
 
       const actions = document.createElement('div');
       actions.className = 'client-access-actions';
       const openClient = Button({
         label: 'Открыть как заказчик', iconName: 'eye', variant: 'primary', block: true,
-        onClick: () => { location.href = 'client.html'; },
+        onClick: () => { location.href = `client.html?object_id=${o.id}#overview`; },
       });
       const copyClient = Button({
         label: 'Скопировать ссылку', iconName: 'share', variant: 'secondary', block: true,
         onClick: async () => {
-          const url = new URL('client.html', location.href).href.split('#')[0];
+          const url = new URL(`client.html?object_id=${o.id}#overview`, location.href).href;
           try { await navigator.clipboard.writeText(url); } catch { /* старый WebView */ }
           haptics.success();
           toast('Ссылка на кабинет скопирована', { icon: '🔗' });

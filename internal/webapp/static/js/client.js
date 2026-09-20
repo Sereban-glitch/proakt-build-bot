@@ -7,6 +7,7 @@ import {
   hideBackButton,
 } from './services/tg.js';
 import { initTheme } from './hooks/useTheme.js';
+import { api } from './services/api.js';
 
 const VALID_TABS = new Set(['overview', 'work', 'finance', 'documents']);
 const tabs = [...document.querySelectorAll('[data-tab]')];
@@ -122,3 +123,30 @@ document.addEventListener('keydown', (event) => {
 window.addEventListener('hashchange', () => activateTab(currentTab(), { syncHash: false }));
 
 activateTab(currentTab());
+loadLiveClient();
+
+function liveObjectId() {
+  const q = new URLSearchParams(location.search).get('object_id');
+  if (q && /^\d+$/.test(q)) return Number(q);
+  const h = new URLSearchParams(location.hash.replace(/^#\/?/, '').split('?')[1] || '');
+  const ho = h.get('object_id');
+  if (ho && /^\d+$/.test(ho)) return Number(ho);
+  return 0;
+}
+
+// Живые данные кабинета: в Telegram тянем /api/client/*, вне Telegram —
+// остаётся статика/демо. Дизайн и вкладки не меняем; при ошибке — тост.
+async function loadLiveClient() {
+  if (isDemo) return;
+  const oid = liveObjectId();
+  if (!oid) return;
+  try {
+    const [ov, fin] = await Promise.all([api.clientOverview(oid), api.clientFinance(oid)]);
+    const name = ov?.object?.name || ov?.object?.Name;
+    if (name) document.title = `ПрорАКТ 360 — ${name}`;
+    window.__clientData = { overview: ov, finance: fin };
+    showToast('Данные объекта загружены с сервера');
+  } catch (e) {
+    showToast(e?.message || 'Нет связи — показаны сохранённые данные');
+  }
+}

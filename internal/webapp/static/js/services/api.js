@@ -113,6 +113,18 @@ const live = {
   /** Google Таблица: состояние и синк */
   priceSource: () => request('/price/source'),
   priceSync: () => request('/price/sync', { method: 'POST', body: {} }),
+
+  // --- 360: кабинет заказчика (read-only) ---
+  clientOverview: (objectId) => request(`/client/overview?object_id=${objectId}`),
+  clientWork: (objectId) => request(`/client/work?object_id=${objectId}`),
+  clientFinance: (objectId) => request(`/client/finance?object_id=${objectId}`),
+  clientDocs: (objectId) => request(`/client/docs?object_id=${objectId}`),
+  // --- 360: привязка заказчика (админка) ---
+  clientsList: (objectId) => request(`/clients?object_id=${objectId}`),
+  clientGrant: (objectId, tgUserId) =>
+    request('/clients/grant', { method: 'POST', body: { object_id: objectId, tg_user_id: tgUserId } }),
+  clientRevoke: (objectId, tgUserId) =>
+    request('/clients/revoke', { method: 'POST', body: { object_id: objectId, tg_user_id: tgUserId } }),
 };
 
 /** Публичный API: demo → mock, иначе → живой бэкенд. */
