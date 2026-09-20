@@ -83,6 +83,7 @@ type Service interface {
 	CanClientSee(ctx context.Context, tgUserID, objectID int64) (bool, error)
 	ClientObjects(ctx context.Context, tgUserID int64) ([]domain.ObjectBrief, error)
 	ClientList(ctx context.Context, objectID int64) ([]int64, error)
+	ClientPhoto(ctx context.Context, tgUserID, photoID int64) (domain.PhotoRec, error)
 }
 
 // Config — параметры HTTP-сервера.

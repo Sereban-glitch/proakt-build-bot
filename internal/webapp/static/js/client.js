@@ -141,12 +141,32 @@ async function loadLiveClient() {
   const oid = liveObjectId();
   if (!oid) return;
   try {
-    const [ov, fin] = await Promise.all([api.clientOverview(oid), api.clientFinance(oid)]);
+    const [ov, fin, work] = await Promise.all([
+      api.clientOverview(oid),
+      api.clientFinance(oid),
+      api.clientWork(oid).catch(() => null),
+    ]);
     const name = ov?.object?.name || ov?.object?.Name;
     if (name) document.title = `ПрорАКТ 360 — ${name}`;
-    window.__clientData = { overview: ov, finance: fin };
+    window.__clientData = { overview: ov, finance: fin, work };
+    applyLivePhotos(work);
     showToast('Данные объекта загружены с сервера');
   } catch (e) {
     showToast(e?.message || 'Нет связи — показаны сохранённые данные');
   }
+}
+
+// Реальные фото в отчёт: первый снимок с API подменяет демо-картинку,
+// подпись и дату — из его caption/created_at. Нет фото — остаётся статика.
+function applyLivePhotos(work) {
+  const photos = work?.photos;
+  if (!photos?.length) return;
+  const first = photos[0];
+  const img = document.querySelector('.sheet-photo');
+  if (img && first?.id) {
+    img.src = `/api/client/photos/${first.id}/file`;
+    img.alt = first.caption || 'Фото скрытых работ';
+  }
+  const title = document.getElementById('report-title');
+  if (title && first?.caption) title.textContent = first.caption;
 }

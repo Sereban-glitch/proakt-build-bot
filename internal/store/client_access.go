@@ -59,6 +59,21 @@ ORDER BY o.created_at DESC`, tgUserID)
 	return out, rows.Err()
 }
 
+// ClientPhoto — фото для заказчика: только свой объект, иначе ErrNotFound.
+func (s *Store) ClientPhoto(ctx context.Context, tgUserID, photoID int64) (domain.PhotoRec, error) {
+	var p domain.PhotoRec
+	err := s.pool.QueryRow(ctx, `
+SELECT p.id, p.act_id, p.object_id, p.file_id, p.file_path, p.caption,
+  COALESCE((SELECT a.act_no FROM acts a WHERE a.id=p.act_id),0), p.created_at
+FROM photos p JOIN client_access c ON c.object_id=p.object_id
+WHERE p.id=$1 AND c.tg_user_id=$2 AND c.status='active'`,
+		photoID, tgUserID).Scan(&p.ID, &p.ActID, &p.ObjectID, &p.FileID, &p.FilePath, &p.Caption, &p.ActNo, &p.CreatedAt)
+	if err != nil {
+		return domain.PhotoRec{}, ErrNotFound
+	}
+	return p, nil
+}
+
 // ClientList — привязанные ID заказчика по объекту (для админки).
 func (s *Store) ClientList(ctx context.Context, objectID int64) ([]int64, error) {
 	rows, err := s.pool.Query(ctx,

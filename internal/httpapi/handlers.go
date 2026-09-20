@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"mime"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -422,35 +419,7 @@ func (s *Server) handlePhotoFile(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, err, "фото")
 		return
 	}
-	if p.FilePath == "" {
-		writeErr(w, http.StatusNotFound, "Файл не сохранён на диске — фото живёт в Telegram (бот пришлёт по кнопке)")
-		return
-	}
-	// защита от path traversal: путь обязан лежать внутри FILES_DIR
-	root, _ := filepath.Abs(s.cfg.FilesDir)
-	full, err := filepath.Abs(p.FilePath)
-	if err != nil || !strings.HasPrefix(full, root+string(os.PathSeparator)) {
-		writeErr(w, http.StatusNotFound, "файл недоступен")
-		return
-	}
-	f, err := os.Open(full)
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "файл недоступен")
-		return
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || st.IsDir() {
-		writeErr(w, http.StatusNotFound, "файл недоступен")
-		return
-	}
-	ct := mime.TypeByExtension(strings.ToLower(filepath.Ext(full)))
-	if ct == "" {
-		ct = "image/jpeg"
-	}
-	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Cache-Control", "private, max-age=86400")
-	http.ServeContent(w, r, filepath.Base(full), st.ModTime(), f)
+	servePhotoFile(s, w, r, p.FilePath)
 }
 
 func (s *Server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {

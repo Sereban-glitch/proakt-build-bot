@@ -59,8 +59,7 @@ func TestClientOverviewForbidden(t *testing.T) {
 	})
 }
 
-func TestClientGrantOwnerOnly(t *testing.T) {
-	f := &fakeSvc{
+func TestClientGrantOwnerOnly(t *testing.T) {	f := &fakeSvc{
 		chat: 777,
 		objs: []domain.ObjectBrief{{Object: domain.Object{ID: 1, ChatID: 777, Name: "Парковый 2"}}},
 	}
@@ -76,6 +75,29 @@ func TestClientGrantOwnerOnly(t *testing.T) {
 		w := authedAs(t, s, 666, "POST", "/api/clients/grant", `{"object_id":1,"tg_user_id":666}`)
 		if w.Code != 404 {
 			t.Fatalf("хочу 404, получил %d", w.Code)
+		}
+	})
+}
+
+func TestClientPhotoFileAccess(t *testing.T) {
+	f := &fakeSvc{
+		chat: 777,
+		objs: []domain.ObjectBrief{{Object: domain.Object{ID: 1, ChatID: 777, Name: "Парковый 2"}}},
+		clientPhotos: []domain.PhotoRec{{ID: 1001, ObjectID: 1, ActID: nil, Caption: "Грунт"}},
+	}
+	f.clientAllow = map[int64][]int64{555: {1}}
+	s := New(Config{Listen: "off", BotToken: testToken, FilesDir: "/nonexistent"}, f)
+
+	t.Run("чужой не получает файл", func(t *testing.T) {
+		w := authedAs(t, s, 666, "GET", "/api/client/photos/1001/file", "")
+		if w.Code != 404 {
+			t.Fatalf("хочу 404, получил %d", w.Code)
+		}
+	})
+	t.Run("свой без файла на диске — честный 404", func(t *testing.T) {
+		w := authedAs(t, s, 555, "GET", "/api/client/photos/1001/file", "")
+		if w.Code != 404 {
+			t.Fatalf("хочу 404 (нет файла), получил %d", w.Code)
 		}
 	})
 }

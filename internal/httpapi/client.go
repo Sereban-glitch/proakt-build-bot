@@ -2,8 +2,12 @@
 package httpapi
 
 import (
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"proakt/internal/domain"
 )
@@ -13,6 +17,7 @@ func clientRoutes(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("GET /api/client/work", s.auth(s.handleClientWork))
 	mux.HandleFunc("GET /api/client/finance", s.auth(s.handleClientFinance))
 	mux.HandleFunc("GET /api/client/docs", s.auth(s.handleClientDocs))
+	mux.HandleFunc("GET /api/client/photos/{id}/file", s.auth(s.handleClientPhotoFile))
 	mux.HandleFunc("GET /api/clients", s.auth(s.handleClientsList))
 	mux.HandleFunc("POST /api/clients/grant", s.auth(s.handleClientGrant))
 	mux.HandleFunc("POST /api/clients/revoke", s.auth(s.handleClientRevoke))
@@ -208,8 +213,7 @@ func (s *Server) handleClientGrant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"granted": true})
 }
 
-func (s *Server) handleClientRevoke(w http.ResponseWriter, r *http.Request) {
-	var req struct {
+func (s *Server) handleClientRevoke(w http.ResponseWriter, r *http.Request) {	var req struct {
 		ObjectID int64 `json:"object_id"`
 		TgUserID int64 `json:"tg_user_id"`
 	}
@@ -228,4 +232,51 @@ func (s *Server) handleClientRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"revoked": true})
+}
+
+// servePhotoFile — отдать снимок с диска, путь обязан лежать в FILES_DIR.
+func servePhotoFile(s *Server, w http.ResponseWriter, r *http.Request, filePath string) {
+	if filePath == "" {
+		writeErr(w, http.StatusNotFound, "Файл не сохранён на диске — фото живёт в Telegram (бот пришлёт по кнопке)")
+		return
+	}
+	root, _ := filepath.Abs(s.cfg.FilesDir)
+	full, err := filepath.Abs(filePath)
+	if err != nil || !strings.HasPrefix(full, root+string(os.PathSeparator)) {
+		writeErr(w, http.StatusNotFound, "файл недоступен")
+		return
+	}
+	f, err := os.Open(full)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "файл недоступен")
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || st.IsDir() {
+		writeErr(w, http.StatusNotFound, "файл недоступен")
+		return
+	}
+	ct := mime.TypeByExtension(strings.ToLower(filepath.Ext(full)))
+	if ct == "" {
+		ct = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	http.ServeContent(w, r, filepath.Base(full), st.ModTime(), f)
+}
+
+// handleClientPhotoFile — снимок заказчику: только свой объект, иначе 404.
+func (s *Server) handleClientPhotoFile(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "Некорректный id фото")
+		return
+	}
+	p, err := s.svc.ClientPhoto(r.Context(), chatOf(r), id)
+	if err != nil {
+		apiErr(w, err, "фото")
+		return
+	}
+	servePhotoFile(s, w, r, p.FilePath)
 }

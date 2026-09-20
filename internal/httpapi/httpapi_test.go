@@ -127,7 +127,8 @@ type fakeSvc struct {
 	comments   map[int64][]domain.EstimateComment
 	shareToken string
 
-	clientAllow map[int64][]int64 // tg_user_id -> object_id
+	clientAllow  map[int64][]int64 // tg_user_id -> object_id
+	clientPhotos []domain.PhotoRec
 }
 
 func (f *fakeSvc) ListObjects(_ context.Context, chatID int64) ([]domain.ObjectBrief, error) {
@@ -367,6 +368,14 @@ func (f *fakeSvc) ClientList(_ context.Context, oid int64) ([]int64, error) {
 		out = []int64{}
 	}
 	return out, nil
+}
+func (f *fakeSvc) ClientPhoto(_ context.Context, tg, pid int64) (domain.PhotoRec, error) {
+	for _, p := range f.clientPhotos {
+		if p.ID == pid && containsID(f.clientAllow[tg], p.ObjectID) {
+			return p, nil
+		}
+	}
+	return domain.PhotoRec{}, store.ErrNotFound
 }
 
 func containsID(ids []int64, id int64) bool {
