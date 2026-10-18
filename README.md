@@ -482,3 +482,7 @@ systemctl status proakt && journalctl -u proakt -n 100
 ## Лицензия
 
 MIT — см. [LICENSE](LICENSE).
+
+## Связанный веб-компонент
+
+[proakt-dashboard](https://github.com/Sereban-glitch/proakt-dashboard) — отдельная read-only панель на Go со статическим веб-фронтендом. Предполагается совместная работа через общую PostgreSQL: dashboard напрямую читает таблицы `objects`, `acts`, `act_lines`, с которыми работает бот. Это не клиент API бота и не замена боту или его Mini App. Совместное развертывание и работа на сервере не проверены; ограничения доступа и данных описаны в README dashboard. Отдельный GLM-проект `proakt360-web` — другой компонент.
